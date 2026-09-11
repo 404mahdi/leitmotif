@@ -45,6 +45,10 @@ Needs [uv](https://docs.astral.sh/uv/) and Python 3.12. PyTorch comes from the C
 uv sync                                               # creates .venv with all dependencies
 uv run python scripts/download_data.py musiccaps-csv
 uv run python scripts/download_data.py fma-small      # ~7.6 GB, resumes if interrupted
+uv run python scripts/download_musiccaps_audio.py     # 10 s clips from YouTube; needs ffmpeg and Node or Deno
+uv run python -m src.datasets                         # train/val/test splits and the top-50 tag list
+uv run python -m src.preprocess musiccaps             # audio features and graphs (then: fma_small)
+uv run python -m src.train bert_tags --text raw       # stage 1
 ```
 
 Without uv: `pip install -r requirements.txt`.
