@@ -40,3 +40,42 @@ data:
     top_k_tags: 50
   fma:
     subset: small
+    clip_seconds: 30
+
+train:
+  bert_tags:                   # stage 1
+    epochs: 10
+    batch_size: 32
+    lr: 3.0e-5                 # BERT weights
+    head_lr: 1.0e-3            # classification head
+  gnn_genre:                   # stage 2
+    epochs: 60
+    batch_size: 64
+    hidden: 256
+    layers: 3
+    dropout: 0.3
+    lr: 1.0e-3
+    weight_decay: 1.0e-4
+  cnn_genre:                   # baseline B2
+    epochs: 30
+    batch_size: 32
+    dropout: 0.3
+    lr: 1.0e-3
+    weight_decay: 1.0e-4
+  fusion:                      # stage 3
+    epochs: 15
+    batch_size: 32
+    dim: 256
+    heads: 4
+    dropout: 0.2
+    trainable_bert_layers: 4   # top BERT layers fine-tuned; the rest stay frozen
+    bert_lr: 2.0e-5
+    lr: 1.0e-3
+  contrastive:                 # stage 4
+    epochs: 30
+    batch_size: 64             # in-batch negatives
+    dim: 256
+    temperature: 0.07          # starting value; learned during training
+    trainable_bert_layers: 4
+    bert_lr: 2.0e-5
+    lr: 5.0e-4
