@@ -1,0 +1,42 @@
+# Leitmotif settings. Paths are relative to the repository root.
+
+seed: 42
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  splits: data/splits
+  results: results
+  checkpoints: checkpoints
+
+audio:
+  sample_rate: 22050
+  n_fft: 2048
+  hop_length: 512
+  n_mels: 128
+  n_chroma: 12
+  n_mfcc: 20
+
+# Clips are only 10-30 s long, so the handout's 5-10 s windows would give graphs
+# of 1-6 nodes. Shorter overlapping windows (or beats) give the GNN real structure.
+segments:
+  mode: fixed                  # fixed | beat
+  window_seconds: 1.0
+  hop_seconds: 0.5
+
+graph:
+  type: segment                # segment | chord
+  similarity_feature: chroma   # chroma | mfcc
+  similarity_threshold: 0.8    # tau: link segments whose cosine similarity is above this
+  max_similar_neighbors: 8     # per node, so dense clips don't become complete graphs
+
+text:
+  model: bert-base-uncased
+  max_length: 128
+
+data:
+  musiccaps:
+    clip_seconds: 10
+    top_k_tags: 50
+  fma:
+    subset: small

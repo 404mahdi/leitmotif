@@ -1,0 +1,41 @@
+[project]
+name = "leitmotif"
+version = "0.1.0"
+description = "Understanding musical context with graph neural networks over song structure and BERT over text"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+authors = [{ name = "Mahdi" }]
+dependencies = [
+    "librosa>=0.10.2",
+    "matplotlib>=3.8",
+    "networkx>=3.2",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.5",
+    "soundfile>=0.12",
+    "torch>=2.7",
+    "torch-geometric>=2.6",
+    "tqdm>=4.66",
+    "transformers>=4.45",
+    "yt-dlp[default]>=2025.10.22",
+]
+
+[dependency-groups]
+dev = ["ipykernel>=6.29", "ipywidgets>=8.1"]
+
+[tool.uv]
+package = false
+# Keep the package cache next to the project instead of in the user profile
+cache-dir = ".cache/uv"
+python-downloads = "never"
+environments = ["sys_platform == 'win32'", "sys_platform == 'linux'"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
