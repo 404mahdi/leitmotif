@@ -1,0 +1,277 @@
+[
+  {
+    "ytid": "3m4QSVVBMss",
+    "caption": "The low quality recording features a pop song that consists of seductive female vocal singing over arpeggiated synth lead melody, pulsating synth keys, sustained synth melody, punchy kick, claps, simple hi hats and groovy bass that glues everything together. It sounds a bit muffled, probably because of the quality of the mix.",
+    "masked_caption": "The [MASK] features a [MASK] that consists of seductive [MASK] singing over arpeggiated [MASK] lead melody, pulsating [MASK] keys, sustained [MASK] melody, [MASK], [MASK], simple hi hats and [MASK] that glues everything together. It sounds a bit muffled, probably because of the quality of the mix.",
+    "true_tags": [
+      "bass",
+      "claps",
+      "groovy",
+      "low quality",
+      "pop",
+      "punchy drums"
+    ],
+    "predicted_raw": [
+      [
+        "low quality",
+        0.987
+      ],
+      [
+        "bass",
+        0.941
+      ],
+      [
+        "groovy",
+        0.934
+      ],
+      [
+        "punchy drums",
+        0.918
+      ],
+      [
+        "pop",
+        0.801
+      ]
+    ],
+    "predicted_masked": [
+      [
+        "low quality",
+        0.989
+      ],
+      [
+        "groovy",
+        0.915
+      ],
+      [
+        "bass",
+        0.859
+      ],
+      [
+        "passionate",
+        0.842
+      ],
+      [
+        "shimmering cymbals",
+        0.829
+      ]
+    ]
+  },
+  {
+    "ytid": "Nqb7nw58q08",
+    "caption": "The song is an instrumental. The song is medium tempo with a groovy drumming rhythm,  percussive bass line and cool electric guitar riff played repeatedly. The song is exciting and energetic. The song has smooth jazz or funk jazz roots.",
+    "masked_caption": "The song is an [MASK]. The song is [MASK] with a [MASK] drumming rhythm,  [MASK] and cool [MASK] riff played repeatedly. The song is [MASK] and [MASK]. The song has smooth jazz or funk jazz roots.",
+    "true_tags": [
+      "bass",
+      "energetic",
+      "exciting",
+      "groovy",
+      "instrumental",
+      "live performance"
+    ],
+    "predicted_raw": [
+      [
+        "instrumental",
+        0.975
+      ],
+      [
+        "exciting",
+        0.915
+      ],
+      [
+        "groovy",
+        0.857
+      ],
+      [
+        "bass",
+        0.654
+      ],
+      [
+        "passionate",
+        0.554
+      ]
+    ],
+    "predicted_masked": [
+      [
+        "instrumental",
+        0.957
+      ],
+      [
+        "groovy",
+        0.922
+      ],
+      [
+        "passionate",
+        0.736
+      ],
+      [
+        "bass",
+        0.654
+      ],
+      [
+        "exciting",
+        0.545
+      ]
+    ]
+  },
+  {
+    "ytid": "O0sDg-yLvlE",
+    "caption": "A male singer sings this gentle country music melody. The song is slow tempo with banjo, mandolin and guitar accompaniment and a double bass playing the lower register harmony. The song is emotional and nostalgic. The song is a country music hit with an average audio quality.",
+    "masked_caption": "A [MASK] sings this gentle country music melody. The song is [MASK] with banjo, mandolin and guitar accompaniment and a double [MASK] playing the lower register harmony. The song is [MASK] and nostalgic. The song is a country music hit with an average audio quality.",
+    "true_tags": [
+      "emotional",
+      "live performance",
+      "male vocals",
+      "romantic",
+      "slow tempo"
+    ],
+    "predicted_raw": [
+      [
+        "male vocals",
+        0.984
+      ],
+      [
+        "emotional",
+        0.931
+      ],
+      [
+        "slow tempo",
+        0.678
+      ],
+      [
+        "romantic",
+        0.671
+      ],
+      [
+        "acoustic guitar",
+        0.619
+      ]
+    ],
+    "predicted_masked": [
+      [
+        "emotional",
+        0.877
+      ],
+      [
+        "romantic",
+        0.714
+      ],
+      [
+        "medium tempo",
+        0.333
+      ],
+      [
+        "female vocals",
+        0.325
+      ],
+      [
+        "male vocals",
+        0.239
+      ]
+    ]
+  },
+  {
+    "ytid": "ad6UhYwTXXQ",
+    "caption": "The audio contains a female voice singing carnatic tones/melody over a shrutibox/drone sound. The audio quality is decent but contains a lot of white noise. It's assumed that this is an amateur recording. This song may be playing at a music teacher's home demonstrating scales to a student.",
+    "masked_caption": "The audio contains a [MASK] carnatic tones/melody over a shrutibox/drone sound. The audio quality is decent but contains a lot of white noise. It's assumed that this is an [MASK]. This song may be playing at a music teacher's home demonstrating scales to a student.",
+    "true_tags": [
+      "amateur recording",
+      "female vocals"
+    ],
+    "predicted_raw": [
+      [
+        "amateur recording",
+        0.914
+      ],
+      [
+        "female vocals",
+        0.587
+      ],
+      [
+        "low quality",
+        0.168
+      ],
+      [
+        "slow tempo",
+        0.099
+      ],
+      [
+        "relaxing",
+        0.055
+      ]
+    ],
+    "predicted_masked": [
+      [
+        "amateur recording",
+        0.444
+      ],
+      [
+        "classical",
+        0.376
+      ],
+      [
+        "instrumental",
+        0.138
+      ],
+      [
+        "live performance",
+        0.128
+      ],
+      [
+        "fast tempo",
+        0.118
+      ]
+    ]
+  },
+  {
+    "ytid": "iMmYVLSb1IY",
+    "caption": "This instrumental song features a piano melody playing at an odd time signature. After two bars, the piano melody shifts by one semi-tone. This is accompanied by the sound of hissing and crying voices. There are ghostly sounds being played in the background. The theme of this song is scary. This song can be used in a horror movie. A sound like that of a fast clock is played in the background.",
+    "masked_caption": "This [MASK] song features a [MASK] melody playing at an odd time signature. After two bars, the [MASK] melody shifts by one semi-tone. This is accompanied by the sound of hissing and crying voices. There are ghostly sounds being played in the background. The theme of this song is [MASK]. This song can be used in a horror movie. A sound like that of a fast clock is played in the background.",
+    "true_tags": [
+      "medium tempo"
+    ],
+    "predicted_raw": [
+      [
+        "instrumental",
+        0.989
+      ],
+      [
+        "piano",
+        0.348
+      ],
+      [
+        "slow tempo",
+        0.264
+      ],
+      [
+        "no other instruments",
+        0.241
+      ],
+      [
+        "medium tempo",
+        0.235
+      ]
+    ],
+    "predicted_masked": [
+      [
+        "instrumental",
+        0.912
+      ],
+      [
+        "slow tempo",
+        0.681
+      ],
+      [
+        "synth",
+        0.415
+      ],
+      [
+        "eerie",
+        0.274
+      ],
+      [
+        "no other instruments",
+        0.274
+      ]
+    ]
+  }
+]

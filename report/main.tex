@@ -642,6 +642,44 @@ trumpet, soulful, claps, youthful. Examples of merged phrases: \emph{low quality
 audio quality, low quality recording; \emph{bass} $\leftarrow$ bass guitar, e-bass, groovy bass line; \emph{relaxing}
 $\leftarrow$ calming, soothing, chill, meditative. The full table is in \texttt{src/tags.py}.
 
+\section{Example stage-1 predictions}
+\label{app:examples}
+
+Five test clips drawn at random, with the tags each stage-1 model ranks highest. Reading the two rows together shows
+what masking removes. For the country clip, the raw model puts \emph{male vocals} first at 0.98 because the caption
+opens with ``A male singer sings''; once that phrase is masked the same tag falls to 0.24 and the model leans on
+\emph{emotional} and \emph{romantic} instead. Where the caption describes the sound without naming a tag, as in the
+first clip, both models agree. Full records, including the masked captions, are in
+\texttt{results/stage1\_examples.json}.
+
+\begin{table}[h]
+  \caption{Top-5 predicted tags with probabilities, for captions as written and with tag words masked.}
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{p{0.14\linewidth}p{0.24\linewidth}p{0.28\linewidth}p{0.28\linewidth}}
+    \toprule
+    Clip & True tags & Raw caption & Masked caption \\
+    \midrule
+    3m4QSVVBMss & bass, claps, groovy, low quality, pop, punchy drums &
+      low quality 0.99, bass 0.94, groovy 0.93, punchy drums 0.92, pop 0.80 &
+      low quality 0.99, groovy 0.92, bass 0.86, passionate 0.84, shimmering cymbals 0.83 \\
+    Nqb7nw58q08 & bass, energetic, exciting, groovy, instrumental, live performance &
+      instrumental 0.97, exciting 0.92, groovy 0.86, bass 0.65, passionate 0.55 &
+      instrumental 0.96, groovy 0.92, passionate 0.74, bass 0.65, exciting 0.55 \\
+    O0sDg-yLvlE & emotional, live performance, male vocals, romantic, slow tempo &
+      male vocals 0.98, emotional 0.93, slow tempo 0.68, romantic 0.67, acoustic guitar 0.62 &
+      emotional 0.88, romantic 0.71, medium tempo 0.33, female vocals 0.33, male vocals 0.24 \\
+    ad6UhYwTXXQ & amateur recording, female vocals &
+      amateur recording 0.91, female vocals 0.59, low quality 0.17, slow tempo 0.10, relaxing 0.06 &
+      amateur recording 0.44, classical 0.38, instrumental 0.14, live performance 0.13, fast tempo 0.12 \\
+    iMmYVLSb1IY & medium tempo &
+      instrumental 0.99, piano 0.35, slow tempo 0.26, no other instruments 0.24, medium tempo 0.23 &
+      instrumental 0.91, slow tempo 0.68, synth 0.41, eerie 0.27, no other instruments 0.27 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \section{Hyperparameters}
 \label{app:hyper}
 
