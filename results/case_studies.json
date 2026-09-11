@@ -1,0 +1,83 @@
+[
+  {
+    "ytid": "-U16iKiXGuY",
+    "caption": "The low quality recording features a live performance of a R&B song that consists of a mellow piano melody and an emotional female vocal singing over it. There are some noises in the recording, alongside lip smack noise.",
+    "true_tags": [
+      "live performance",
+      "low quality",
+      "noisy"
+    ],
+    "predicted_top4": [
+      "low quality",
+      "noisy",
+      "live performance",
+      "female vocals"
+    ],
+    "clip_average_precision": 1.0,
+    "most_attended_segment_per_word": {
+      "melody": "6.6s",
+      "singing": "1.0s",
+      "noises": "8.2s",
+      "alongside": "8.2s",
+      "lip": "1.0s",
+      "smack": "8.2s",
+      "noise": "8.2s"
+    }
+  },
+  {
+    "ytid": "05JAmKFVy44",
+    "caption": "The low quality recording features a kids song played through some kind of toy, and it consists of low male vocal singing over some key chords. It sounds distorted and crushed. The recording is noisy and in mono, as it was probably recorded with a poor quality microphone.",
+    "true_tags": [
+      "low quality",
+      "mono",
+      "noisy"
+    ],
+    "predicted_top4": [
+      "noisy",
+      "low quality",
+      "mono",
+      "happy"
+    ],
+    "clip_average_precision": 1.0,
+    "most_attended_segment_per_word": {
+      "kind": "8.7s",
+      "toy": "3.1s",
+      "low": "7.7s",
+      "key": "7.7s",
+      "chords": "7.7s",
+      "distorted": "8.7s",
+      "recorded": "6.1s",
+      "poor": "8.7s",
+      "quality": "8.7s",
+      "microphone": "8.7s"
+    }
+  },
+  {
+    "ytid": "0fiOM---7QI",
+    "caption": "This is a traditional, cultural South Asian song. It is upbeat, vibrant, cheerful. The lead singer sings in a fast paced and rhythmic way, connecting many words within a short span of musical time. The rest of the performers are clapping their hands, playing the tabla. This is a live performance.",
+    "true_tags": [
+      "energetic",
+      "live performance",
+      "upbeat"
+    ],
+    "predicted_top4": [
+      "live performance",
+      "energetic",
+      "upbeat",
+      "happy"
+    ],
+    "clip_average_precision": 1.0,
+    "most_attended_segment_per_word": {
+      "traditional": "2.6s",
+      "asian": "4.1s",
+      "lead": "4.1s",
+      "singer": "5.1s",
+      "sings": "4.1s",
+      "short": "5.1s",
+      "span": "5.1s",
+      "rest": "4.1s",
+      "performers": "4.1s",
+      "tab": "5.6s"
+    }
+  }
+]

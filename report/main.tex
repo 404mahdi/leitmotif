@@ -57,8 +57,10 @@ spectrograms, (3) fuse the two modalities with bidirectional cross-attention and
 (4) train a contrastive dual encoder for text-to-music retrieval and zero-shot tagging. We show that the
 caption-to-tag task leaks labels: 65.6\% of positive tag occurrences are spelled out in the caption, and hiding
 those words lowers BERT's test macro-F1 from 0.659 to 0.458. On FMA-small the best graph model reaches 0.400
-macro-F1 against 0.537 for a CNN on spectrograms; fusion reaches \tbd{F1} macro-F1 on masked captions (BERT only: \tbd{F1}); and the dual
-encoder retrieves the correct clip in the top 10 for \tbd{R@10} of test captions. Code, graphs and results are
+macro-F1 against 0.537 for a CNN on spectrograms, and letting a small CNN read each segment's spectrogram patch lifts
+the graph model to 0.485. Fusing the audio graph with masked captions does not beat text alone (0.448 against 0.468),
+but it raises average precision for the tags masking hides, such as female vocals (+0.16); and the dual encoder
+retrieves the matching clip in its top 10 for 8.7\% of test captions, 22 times chance. Code, graphs and results are
 available at \url{https://github.com/404mahdi/leitmotif}.
 \end{abstract}
 
@@ -77,23 +79,18 @@ edges link segments that are adjacent in time or acoustically similar, so repeti
 much like the self-similarity view of music structure \citep{foote1999selfsimilarity}. A GNN
 \citep{hamilton2017graphsage, velickovic2018gat} encodes this graph, BERT \citep{devlin2019bert} encodes captions, and
 attention \citep{vaswani2017attention} lets each modality query the other. The project follows the four tasks of the
-course brief:
-\begin{enumerate}
-  \item \textbf{Tags from text:} a BERT multi-label classifier over MusicCaps captions (Section~\ref{sec:res-text}).
-  \item \textbf{Genre from structure:} GraphSAGE and GAT encoders on segment and chord graphs of FMA-small, compared
-        with a CNN on log-mel spectrograms (Section~\ref{sec:res-graph}).
-  \item \textbf{Fusion:} GNN--BERT models predicting 50 context tags, with an ablation over BERT-only, GNN-only, early
-        concatenation and cross-attention (Section~\ref{sec:res-fusion}).
-  \item \textbf{Retrieval:} a contrastive dual encoder mapping graphs and captions to a shared space, evaluated on
-        text-to-audio retrieval and zero-shot tagging (Section~\ref{sec:res-retrieval}).
-\end{enumerate}
+course brief: tags from text with a BERT multi-label classifier (Section~\ref{sec:res-text}); genre from structure with
+GraphSAGE and GAT encoders on segment and chord graphs, against a CNN on log-mel spectrograms
+(Section~\ref{sec:res-graph}); fusion of the two modalities for 50 context tags, ablating BERT-only, GNN-only, early
+concatenation and cross-attention (Section~\ref{sec:res-fusion}); and a contrastive dual encoder for text-to-music
+retrieval and zero-shot tagging (Section~\ref{sec:res-retrieval}).
 
-Our contributions are: (i) a reproducible pipeline that downloads the data, extracts features and builds segment and
-chord graphs, released with sample graphs; (ii) an analysis of label leakage in the MusicCaps caption-to-tag task
-together with a masked-caption protocol that removes the most direct leak; (iii) a comparison of graph encoders and a
-CNN under FMA's official artist-filtered split; (iv) a bidirectional cross-attention fusion whose text-to-segment
-attention shows which moments of a clip each caption word aligns with; and (v) a contrastive text-music model with
-zero-shot tagging.
+Our contributions are a reproducible pipeline that downloads the data, builds segment and chord graphs and releases
+sample graphs; an analysis of label leakage in the MusicCaps caption-to-tag task with a masked-caption protocol that
+removes the most direct leak; a comparison of graph encoders against a CNN under FMA's artist-filtered split,
+including a hybrid whose nodes are learned from spectrogram patches; a bidirectional cross-attention fusion whose
+attention exposes which moments of a clip a caption refers to; and a contrastive text-music model with zero-shot
+tagging and an automatic relevance study of its results.
 
 % ------------------------------------------------------------------------------------------------
 \section{Related work}
@@ -107,7 +104,7 @@ repetition and form \citep{foote1999selfsimilarity}; our segment graph is a spar
 GraphSAGE aggregates neighbour features with a learned function of the node's own state
 \citep{hamilton2017graphsage}, and graph attention networks weight neighbours by learned attention
 \citep{velickovic2018gat}; we use the GATv2 variant, whose attention is a strictly more expressive function of both
-endpoints \citep{brody2022gatv2}. Our implementation uses PyTorch Geometric \citep{fey2019pyg}.
+endpoints \citep{brody2022gatv2}, implemented with PyTorch Geometric \citep{fey2019pyg}.
 
 \paragraph{Language and audio-language models.}
 BERT provides contextual token representations that transfer well to classification \citep{devlin2019bert}; we use the
@@ -126,7 +123,7 @@ MusicCaps contains 5,521 ten-second clips from AudioSet, each with a free-text c
 musician. Only YouTube identifiers are distributed, so we downloaded the audio with \texttt{yt-dlp}. Cutting the clip
 by stream copy snaps to container chunk boundaries and returned audio up to 10\,s away from the labelled window, so we
 re-encode at the cut points; the resulting clips match an independent ffmpeg decode with correlation 0.998. Of the
-5,521 clips, \tbd{N} (\tbd{p}\%) could be retrieved; the others are private or removed.
+5,521 clips, 4,910 (88.9\%) could be retrieved; the others are private, removed or repeatedly failed to download.
 
 MusicCaps has no official split. We use the 2,858 clips flagged as AudioSet evaluation clips as the test set and send
 10\% of the remaining 2,663 clips to validation using a stable hash of the video id, giving 2,406 / 257 / 2,858
@@ -145,23 +142,20 @@ carry at least one, and a clip has 3.89 labels on average.
 Captions and aspect lists were written by the same annotator at the same time, so a text model can often read a
 label straight off the caption. Among the 50 most frequent raw aspects, 65.6\% of positive clip--aspect pairs appear
 verbatim in the caption. We therefore also evaluate a \emph{masked} setting in which every phrase that maps to a
-vocabulary tag is replaced by \texttt{[MASK]}; this hides 10.4\% of caption words on average. For example, \emph{``The
-low quality recording features a ballad song that contains sustained strings, mellow piano melody and soft female vocal
-singing over it''} becomes \emph{``The [MASK] features a ballad song that contains sustained [MASK], [MASK] [MASK]
-melody and [MASK] [MASK] singing over it''}. Paraphrases such as \emph{poor audio-quality} survive masking, so the
-masked setting reduces rather than eliminates leakage.
+vocabulary tag is replaced by \texttt{[MASK]}, hiding 10.4\% of caption words on average: \emph{``The low quality
+recording features \dots\ mellow piano melody and soft female vocal singing''} becomes \emph{``The [MASK] features
+\dots\ [MASK] [MASK] melody and [MASK] [MASK] singing''}. Paraphrases such as \emph{poor audio-quality} survive
+masking, so the masked setting reduces rather than eliminates leakage.
 
-\paragraph{FMA-small.}
+\paragraph{FMA-small and datasets not used.}
 FMA-small \citep{defferrard2017fma} contains 8,000 thirty-second MP3 excerpts from eight balanced genres (Electronic,
 Experimental, Folk, Hip-Hop, Instrumental, International, Pop, Rock; 1,000 tracks each) with an official
 6,400 / 800 / 800 split that is filtered by artist; we verified that no artist appears in more than one split. Six
 training files that are truncated in the FMA release could not be decoded, which leaves 7,994 tracks
-(6,394 / 800 / 800).
-
-\paragraph{Datasets not used.}
-We did not use GTZAN, whose repetitions, mislabellings and distortions are well documented \citep{sturm2013gtzan} and
-which has no artist-filtered split. DEAM provides valence and arousal targets, but its songs do not coincide with the
-clips we have captions for, so the emotion terms of the multi-task loss in the brief are omitted.
+(6,394 / 800 / 800). We did not use GTZAN, whose repetitions, mislabellings and distortions are well documented
+\citep{sturm2013gtzan} and which has no artist-filtered split. DEAM provides valence and arousal targets, but its songs
+do not coincide with the clips we have captions for, so the emotion terms of the multi-task loss in the brief are
+omitted.
 
 \begin{table}[t]
   \caption{Data used in each stage. MusicCaps clip counts for stages 3 and 4 exclude videos that could not be
@@ -175,8 +169,8 @@ clips we have captions for, so the emotion terms of the multi-task loss in the b
     \midrule
     1: tags from text  & MusicCaps captions          & 50 tags (multi-label) & 2,406 / 257 / 2,858 & 5,521 \\
     2: genre           & FMA-small audio graphs      & 8 genres (single)     & 6,394 / 800 / 800   & 7,994 \\
-    3: fusion          & MusicCaps graphs + captions & 50 tags (multi-label) & \tbd{split}         & \tbd{n} \\
-    4: retrieval       & MusicCaps graphs + captions & caption pairs         & \tbd{split}         & \tbd{n} \\
+    3: fusion          & MusicCaps graphs + captions & 50 tags (multi-label) & 2,121 / 234 / 2,555 & 4,910 \\
+    4: retrieval       & MusicCaps graphs + captions & caption pairs         & 2,121 / 234 / 2,555 & 4,910 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -223,7 +217,7 @@ occupies, and the mean of the 180 segment features over the beats where it sound
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{song_arc_diagram}
+  \includegraphics[width=0.88\linewidth]{song_arc_diagram}
   \caption{A segment graph drawn as an arc diagram. Dots are one-second segments along the time axis, the grey line is
   the chain of temporal edges, and each arc is a similarity edge coloured by centred chroma cosine similarity. Long arcs
   join moments far apart in time that sound alike, which is how repetition appears to the GNN.}
@@ -339,18 +333,24 @@ hyperparameter. We keep the checkpoint with the best validation macro-F1 (mean r
 results for that checkpoint only. For tag prediction, a single decision threshold is chosen on validation from
 $\{0.05, 0.10, \dots, 0.95\}$ to maximise macro-F1 and then applied to the test set; per-epoch curves use 0.5. Training
 ran on a single NVIDIA RTX 5060 Laptop GPU with 8\,GB of memory: a stage-1 epoch takes about 15\,s, a GNN epoch on
-FMA-small 2--4\,s and a CNN epoch about 55\,s. The random seed is fixed at 42.
+FMA-small 2--4\,s, a CNN epoch about 55\,s and a stage-3 epoch 10--15\,s. The random seed is fixed at 42.
 
-\paragraph{Metrics.}
-For tags we report macro-F1 (the mean of per-tag F1), micro-F1 (F1 over all tag decisions pooled) and AUC-PR (the mean
-over tags of average precision, skipping tags without positives in the split). For genre we report accuracy, macro-F1
-and one-vs-rest AUC-PR. For retrieval we report recall at $K \in \{1, 5, 10\}$ and the median rank of the true match, in
-both directions, over the whole test split.
+\paragraph{Hyperparameter rounds.}
+Stages 3 and 4 were each run with two settings, and the choice between them used validation data only. Stage 3 first
+ran for 15 epochs with a single learning rate for the pretrained graph encoder and for every newly initialised layer;
+all variants were still improving at the final epoch, so a second round used 25 epochs and a five times smaller
+learning rate ($2\times10^{-4}$) for the graph encoder. Validation macro-F1 improved for every variant that uses text
+(BERT only 0.518 to 0.548, early concatenation 0.510 to 0.534, cross-attention 0.493 to 0.495) and the ordering did
+not change, so the second round is the one reported. Stage 4 was run with four and with two trainable BERT layers; two
+layers was worse on validation (mean recall 0.337 against 0.350), so the four-layer setting is reported. Test numbers
+were computed once, for the selected setting of each stage.
 
-\paragraph{Baselines.}
-B1 guesses each tag at random with its training-set frequency (tags) or always predicts the most common training genre
-(genre). B2 is the CNN on log-mel spectrograms. B3 is the BERT-only model of stage 1 and its audio-subset counterpart in
-the stage-3 ablation.
+\paragraph{Metrics and baselines.}
+For tags we report macro-F1, micro-F1 and AUC-PR (the mean over tags of average precision, skipping tags without
+positives); for genre, accuracy, macro-F1 and one-vs-rest AUC-PR; for retrieval, recall at $K \in \{1, 5, 10\}$ and the
+median rank of the true match in both directions over the whole test split. Baseline B1 guesses each tag at random with
+its training-set frequency, or always predicts the most common training genre; B2 is the CNN on log-mel spectrograms;
+B3 is the BERT-only model of stage 1 and its audio-subset counterpart in the stage-3 ablation.
 
 % ------------------------------------------------------------------------------------------------
 \section{Results}
@@ -382,7 +382,7 @@ within ten epochs and that the gap between validation and test is larger in the 
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.85\linewidth]{stage1_curves}
+  \includegraphics[width=0.74\linewidth]{stage1_curves}
   \caption{Stage 1 macro-F1 and micro-F1 by epoch at threshold 0.5, on raw (left) and masked (right) captions.}
   \label{fig:curves}
 \end{figure}
@@ -417,27 +417,25 @@ within ten epochs and that the gap between validation and test is larger in the 
 \end{table}
 
 All graph models are about three times as accurate as the majority baseline, and segment graphs beat chord graphs for
-both encoders: the similarity structure of timbre and harmony over one-second windows says more about genre than a
-sequence of template-matched triads, which are unreliable for genres such as Experimental or Hip-Hop that are not built
-on chord progressions. GAT, which also sees the edge attributes, is slightly better than GraphSAGE on both graph types.
-The CNN on full log-mel spectrograms is nevertheless clearly stronger, with 0.537 against 0.400 macro-F1. We attribute
-most of the gap to the node features: each node summarises a second of audio by its mean spectrum, mean chroma and a
-few MFCC statistics, which discards the fine time--frequency texture the CNN learns from. The graph models also
-overfit, reaching near-zero training loss within 60 epochs while validation macro-F1 plateaus around 0.45, and training
-on random half-length crops did not help them (0.369 and 0.378).
+both encoders: similarity of timbre and harmony over one-second windows says more about genre than a sequence of
+template-matched triads, which are unreliable for genres such as Experimental or Hip-Hop that are not built on chord
+progressions. GAT, which also sees the edge attributes, is slightly better than GraphSAGE on both graph types. The CNN
+on full log-mel spectrograms is nevertheless clearly stronger (0.537 against 0.400 macro-F1). We attribute most of the
+gap to the node features, which summarise a second of audio by its mean spectrum, mean chroma and a few MFCC
+statistics and so discard the fine time--frequency texture the CNN learns from. The graph models also overfit, reaching
+near-zero training loss within 60 epochs while validation macro-F1 plateaus around 0.45, and random half-length crops
+did not help (0.369 and 0.378).
 
-Giving the graph model that texture back closes most of the gap. When a small CNN embeds each segment's spectrogram
-patch and GAT passes messages over the same segment graph, test macro-F1 rises from 0.400 to 0.485. The hybrid still
-trails the CNN overall, but its errors differ (Figure~\ref{fig:confusion}): it recognises Electronic (recall 0.72 against
-0.58 for the CNN) and Rock (0.56 against 0.50) better, while the CNN is well ahead on International (0.68 against
-0.40) and Pop (0.52 against 0.33). One reading is that loop-based electronic music and riff-driven rock expose the
-repetition the graph encodes, whereas International and Pop are told apart more by timbre and instrumentation across
-the whole clip; we did not test this directly. Because it is the strongest graph encoder, the hybrid initialises the
-graph side of stages 3 and 4.
+Giving the graph model that texture back closes most of the gap: with a small CNN embedding each segment's spectrogram
+patch, the same GAT rises from 0.400 to 0.485. The hybrid still trails the CNN overall, but its errors differ
+(Figure~\ref{fig:confusion}): it recognises Electronic (recall 0.72 against 0.58) and Rock (0.56 against 0.50) better,
+while the CNN leads on International (0.68 against 0.40) and Pop (0.52 against 0.33). Loop-based electronic music and
+riff-driven rock plausibly expose the repetition the graph encodes, though we did not test that directly. As the
+strongest graph encoder, the hybrid initialises the graph side of stages 3 and 4.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.55\linewidth]{stage2_confusion}
+  \includegraphics[width=0.48\linewidth]{stage2_confusion}
   \caption{Test confusion matrix of the best stage-2 graph model, normalised by true genre. Diagonal values are
   per-genre recall.}
   \label{fig:confusion}
@@ -447,7 +445,8 @@ graph side of stages 3 and 4.
 \label{sec:res-fusion}
 
 \begin{table}[t]
-  \caption{Stage 3 ablation on the MusicCaps test clips with audio, masked captions, 50 tags.}
+  \caption{Stage 3 ablation on the 2,555 MusicCaps test clips with audio, captions with tag words masked, 50 tags.
+  Every variant that uses audio starts from the stage-2 GAT with CNN node features.}
   \label{tab:fusion}
   \centering
   \small
@@ -455,20 +454,42 @@ graph side of stages 3 and 4.
     \toprule
     Fusion & Macro-F1 & Micro-F1 & AUC-PR \\
     \midrule
-    GNN only (audio graph)           & \tbd{} & \tbd{} & \tbd{} \\
-    BERT only (masked caption)       & \tbd{} & \tbd{} & \tbd{} \\
-    Early concatenation $[g\,;\,t]$  & \tbd{} & \tbd{} & \tbd{} \\
-    Cross-attention                  & \tbd{} & \tbd{} & \tbd{} \\
+    GNN only (audio graph)           & 0.227 & 0.304 & 0.170 \\
+    BERT only (masked caption)       & \textbf{0.468} & \textbf{0.556} & \textbf{0.459} \\
+    Early concatenation $[g\,;\,t]$  & 0.448 & 0.535 & 0.438 \\
+    Cross-attention                  & 0.440 & 0.528 & 0.428 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\tbd{Discussion of Table~\ref{tab:fusion}, the t-SNE plot (Figure~\ref{fig:tsne}) and three case studies of
-text-to-segment attention (Figure~\ref{fig:cases}).}
+The audio graph on its own reaches 0.227 macro-F1, about three times the random baseline of 0.078, so a clip's
+structure and texture do carry usable context. Text is much stronger, and neither fusion improves on it: early
+concatenation gives up 0.02 macro-F1 against BERT alone and cross-attention 0.03. The ordering held under both
+hyperparameter settings we tried (Section~\ref{sec:setup}), so it is not an artefact of one schedule.
+
+The aggregate hides what fusion actually does. Figure~\ref{fig:taggains} in Appendix~\ref{app:figures} compares
+per-tag average precision of the strongest fusion variant with BERT alone. Audio helps most where a masked caption says
+least about the sound: \emph{female vocals} (+0.16 AP), \emph{exciting} (+0.10), \emph{male vocals} (+0.08) and
+\emph{energetic} (+0.07). It costs accuracy on tags that the surrounding words still imply, such as \emph{mellow}
+($-$0.12), \emph{live performance} ($-$0.12) and \emph{eerie} ($-$0.12). Only 16 of the 50 tags improve with early
+concatenation and 11 with cross-attention, which is why the macro average falls. Both fusions mix the two modalities
+the same way for every tag; a model that could route each tag to whichever modality predicts it better would not have
+to make that trade.
+
+Figure~\ref{fig:tsne} projects the fused representation $z$ of the test clips with t-SNE. Mood separates more clearly
+than genre: \emph{energetic} and \emph{relaxing} clips sit in different regions, while \emph{dance}, \emph{electronic}
+and \emph{pop} overlap, which matches the confusion between those genres in stage 2.
+
+The case studies in Figure~\ref{fig:cases} show what the cross-attention actually learns. Its text-to-segment attention
+is not word-specific: within a clip, nearly every caption word attends to the same one or two segments, which appear as
+vertical stripes in the attention maps. The model therefore learns \emph{where} the informative audio is, for example
+the last second of a harp recording or the chorus entry of a live performance, rather than aligning individual words
+with moments. That is a useful signal for locating the part of a clip a description refers to, but it is weaker than
+the word-level alignment the design allows for.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{stage3_tsne}
+  \includegraphics[width=0.84\linewidth]{stage3_tsne}
   \caption{t-SNE of the fused representation $z$ for test clips, coloured by the most frequent genre tags (left) and
   mood tags (right). Clips with none of the three tags are grey.}
   \label{fig:tsne}
@@ -476,7 +497,7 @@ text-to-segment attention (Figure~\ref{fig:cases}).}
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{case_studies}
+  \includegraphics[width=0.76\linewidth]{case_studies}
   \caption{Case studies. Left: caption words (rows) against one-second segments (columns) under the text-to-graph
   attention $A^{T\to G}$ of the cross-attention model. Right: the same clip's segment graph, with nodes shaded by the
   attention they receive averaged over the words shown.}
@@ -487,7 +508,7 @@ text-to-segment attention (Figure~\ref{fig:cases}).}
 \label{sec:res-retrieval}
 
 \begin{table}[t]
-  \caption{Stage 4 retrieval over the \tbd{n} MusicCaps test clips with audio. Chance R@10 is \tbd{}.}
+  \caption{Stage 4 retrieval over the 2,555 MusicCaps test clips with audio. Chance R@10 is 0.004.}
   \label{tab:retrieval}
   \centering
   \small
@@ -495,13 +516,27 @@ text-to-segment attention (Figure~\ref{fig:cases}).}
     \toprule
     Direction & R@1 & R@5 & R@10 & Median rank \\
     \midrule
-    Caption $\to$ audio & \tbd{} & \tbd{} & \tbd{} & \tbd{} \\
-    Audio $\to$ caption & \tbd{} & \tbd{} & \tbd{} & \tbd{} \\
+    Caption $\to$ audio & 0.013 & 0.051 & 0.087 & 151 \\
+    Audio $\to$ caption & 0.013 & 0.056 & 0.095 & 140 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\tbd{Retrieval discussion, zero-shot AUC-PR against the stage-3 supervised model, and qualitative examples.}
+Retrieval is far above chance and still weak in absolute terms. R@10 of 0.087 is 22 times the 0.004 a random ranking
+would give, and the matching clip has a median rank of 151 out of 2,555, the top 6\%. Both directions behave the same
+way, as the symmetric loss intends. The model memorises its training pairs: the training loss falls from 4.11 to 0.11
+while validation mean recall peaks at epoch 10 of 30, which is what 2,121 caption--clip pairs allow. Freezing more of
+BERT and slowing the graph encoder, the settings that helped stage 3, made validation mean recall slightly worse
+(0.337 against 0.350), so the first setting was kept.
+
+Zero-shot tagging through the shared space is close to useless: scoring each test clip against prompt embeddings of
+the 50 tags gives 0.089 mean average precision, barely above the 0.078 of random ranking, and far below the supervised
+models of stage 3 (0.170 for the graph alone, 0.459 for BERT on masked captions). Retrieval trains the space to
+separate whole captions from each other, not to place short tag phrases where the matching audio lies, and 2,121 pairs
+are too few to learn that alignment. Ten caption queries with their three closest clips are saved in
+\texttt{results/retrieval\_examples/examples.json}; they are plausible without being right, as when a query describing a
+live hip-hop recording with male vocals, piano, bass and hi-hats returns a clip whose own caption reads ``an erotic
+male voice \dots\ sustained soft piano synth and a drum kit''.
 
 \paragraph{Relevance of retrieved clips.}
 The brief suggests rating retrieved clips with at least five human listeners. We did not run a listening study.
@@ -510,25 +545,78 @@ on a 1--5 scale by three automatic judges that share no weights with our models:
 Jaccard overlap of the query clip's and candidate clip's tags), caption agreement (cosine similarity of the two
 captions under the all-MiniLM-L6-v2 sentence encoder) and audio--text agreement (cosine similarity of the query caption
 and the candidate's audio under the LAION CLAP model \texttt{clap-htsat-unfused}). The last two are expressed as
-$1 + 4p$, where $p$ is the share of random test caption pairs, or caption--clip pairs, that score lower. \tbd{Scores.}
-These scores are a proxy for, not a substitute for, human judgement; CLAP was pretrained on general audio--text data,
-so it may share biases with our text encoder.
+$1 + 4p$, where $p$ is the share of random test caption pairs, or caption--clip pairs, that score lower. Retrieved clips
+beat random clips on all three judges (Table~\ref{tab:relevance}): tag overlap 1.70 against 1.32, caption similarity
+3.61 against 3.13, and audio--text agreement 4.49 against 3.45, with the clip the caption was actually written for
+reaching 4.80. Retrieval therefore returns music that is genuinely related to the query, even though the correct clip
+is rarely first. These scores are a proxy for, not a substitute for, human judgement; CLAP was pretrained on general
+audio--text data, so it may share biases with our text encoder.
+
+\begin{table}[t]
+  \caption{Automatic relevance of retrieved clips on a 1--5 scale: 10 caption queries, their three closest clips, and
+  three random test clips per query as a reference. A score of 3 means ``as similar as a typical random pair''.}
+  \label{tab:relevance}
+  \centering
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    Clips & Tag overlap & Caption similarity & Audio--text agreement \\
+    \midrule
+    Rank 1                & 1.95 & 3.63 & 4.42 \\
+    Rank 2                & 1.37 & 3.33 & 4.46 \\
+    Rank 3                & 1.78 & 3.87 & 4.59 \\
+    Retrieved, all ranks  & 1.70 & 3.61 & 4.49 \\
+    Random clips          & 1.32 & 3.13 & 3.45 \\
+    The clip the caption describes & -- & -- & 4.80 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 % ------------------------------------------------------------------------------------------------
 \section{Discussion and limitations}
 
-\tbd{Summarise what the graph view adds, when fusion helps, and the retrieval quality.}
+Three findings stand out, and none of them is the one we set out to show.
+
+\paragraph{Structure carries real information, but node features decide how much.}
+A segment graph alone predicts genre three times better than the majority class and 50 context tags three times better
+than random guessing, so repetition and similarity between moments are genuinely informative. Yet with hand-made node
+summaries the graph model reaches only 0.400 macro-F1 on FMA genres against 0.537 for a CNN on the same audio. Letting
+a small CNN read each segment's spectrogram patch, while message passing still runs over the same graph, recovers most
+of that gap (0.485). What limited the graph model was not the graph but what each node was allowed to see.
+
+\paragraph{Fusion helps per tag, not on average.}
+Neither early concatenation nor cross-attention beats BERT on masked captions (0.448 and 0.440 against 0.468). The
+per-tag view explains why: audio raises average precision for tags the masked caption no longer states, above all
+\emph{female vocals} (+0.16), \emph{exciting} (+0.10) and \emph{male vocals} (+0.08), and lowers it for tags the
+remaining words still imply. Only 16 of 50 tags improve, and a macro average over 50 tags turns that trade into a
+loss. Both fusions combine the modalities identically for every tag; a gate that learned, per tag, how much to trust
+each side is the obvious next step and is what these numbers argue for.
+
+\paragraph{Retrieval works, weakly.}
+The contrastive space puts the matching clip in the top 10 for 8.7\% of captions, 22 times chance, with a median rank
+of 151 out of 2,555, and three independent judges score retrieved clips well above random clips. It also memorises its
+2,121 training pairs within ten epochs, and its zero-shot tagging is barely above random, so the space aligns whole
+captions rather than concepts. More paired audio and text, or an audio encoder pretrained at scale, would matter more
+here than any change of architecture.
 
 \paragraph{Limitations.}
 Captions and tags were written together, and masking removes only exact phrases. The labelled data is small: stages 3
-and 4 train on at most 2,406 clips, and some MusicCaps videos are no longer available. Template-matched chords are a
-coarse estimate of harmony. FMA genres are single-label, and FMA and MusicCaps differ in recording conditions, which
-limits transfer of the pretrained graph encoder. Finally, retrieval quality is judged automatically rather than by
-listeners.
+and 4 train on 2,121 clips, and 611 MusicCaps videos are no longer available. Template-matched chords are a coarse
+estimate of harmony. FMA genres are single-label, and FMA and MusicCaps differ in recording conditions, which limits
+transfer of the pretrained graph encoder. The cross-attention maps are not word-specific, so the alignment they give
+is between a caption and a moment, not between a word and a moment. Finally, retrieval quality is judged
+automatically rather than by listeners.
 
 \section{Conclusion}
 
-\tbd{Conclusion.}
+We built a pipeline that reads a song as a graph of its own repetitions and as the words people use to describe it,
+and evaluated it across four stages on FMA-small and MusicCaps. Song structure predicts genre and context tags well
+above chance, and its usefulness grew sharply once each node could see the spectrogram rather than a summary of it,
+but a plain CNN still classifies genre better, and text still predicts tags better than text plus audio. The value of
+the audio graph shows up per tag and per moment: it improves exactly the tags a caption stops describing once its tag
+words are hidden, and its attention marks where in a clip the informative audio sits. For the tasks in this project,
+the honest conclusion is that graph structure is a useful complement to language rather than a replacement for
+stronger audio features, and that the fusion should be allowed to weigh the two modalities per tag.
 
 \paragraph{Reproducibility.}
 The repository contains the full pipeline, from download scripts to training, evaluation and figures, with exact
@@ -557,11 +645,11 @@ $\leftarrow$ calming, soothing, chill, meditative. The full table is in \texttt{
 \label{app:hyper}
 
 \begin{table}[h]
-  \caption{Training settings. Learning rates are given as pretrained BERT layers / newly initialised layers; wd is
-  the AdamW weight decay.}
+  \caption{Training settings. Learning rates are given as pretrained BERT layers / newly initialised layers, and for
+  stage 3 as BERT / pretrained graph encoder / new layers; wd is the AdamW weight decay.}
   \centering
-  \footnotesize
-  \setlength{\tabcolsep}{4pt}
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
   \begin{tabular}{lcccl}
     \toprule
     Model & Epochs & Batch & Learning rate & Other settings \\
@@ -570,7 +658,7 @@ $\leftarrow$ calming, soothing, chill, meditative. The full table is in \texttt{
     Stage 2 GNN          & 60 & 64 & $10^{-3}$ & 3 layers, width 256, dropout 0.3, wd $10^{-4}$ \\
     Stage 2 + CNN nodes  & 20 & 32 & $10^{-3}$ & as above; patch CNN with 16/32/64 channels, 128-d embedding \\
     B2 CNN               & 30 & 32 & $10^{-3}$ & dropout 0.3, wd $10^{-4}$ \\
-    Stage 3 fusion       & 15 & 32 & $2{\times}10^{-5}$ / $10^{-3}$ & $d{=}256$, 4 heads, top 4 BERT layers, wd 0.01 \\
+    Stage 3 fusion       & 25 & 32 & $2{\times}10^{-5}$ / $2{\times}10^{-4}$ / $10^{-3}$ & $d{=}256$, 4 heads, top 4 BERT layers, wd 0.01 \\
     Stage 4 dual encoder & 30 & 64 & $2{\times}10^{-5}$ / $5{\times}10^{-4}$ & $\tau_0{=}0.07$, top 4 BERT layers, wd 0.01 \\
     \bottomrule
   \end{tabular}
@@ -581,7 +669,16 @@ $\leftarrow$ calming, soothing, chill, meditative. The full table is in \texttt{
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.9\linewidth]{stage2_comparison}
+  \includegraphics[width=0.66\linewidth]{stage3_tag_gains}
+  \caption{Per-tag change in test average precision when the audio graph is added to the masked caption (early
+  concatenation minus BERT only). Blue tags improve, red tags get worse; the eight largest movements in each direction
+  are shown.}
+  \label{fig:taggains}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.88\linewidth]{stage2_comparison}
   \caption{Stage 2 test accuracy and macro-F1 on FMA-small. The best model that is not a baseline is blue; baselines
   and the other models are grey.}
   \label{fig:stage2-bars}
@@ -589,7 +686,7 @@ $\leftarrow$ calming, soothing, chill, meditative. The full table is in \texttt{
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.9\linewidth]{stage3_ablation}
+  \includegraphics[width=0.88\linewidth]{stage3_ablation}
   \caption{Stage 3 ablation on masked captions: test macro-F1 and AUC-PR. The best fusion variant is blue.}
   \label{fig:stage3-bars}
 \end{figure}

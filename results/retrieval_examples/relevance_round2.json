@@ -1,0 +1,517 @@
+{
+  "judges": {
+    "tags": "1 + 4 x Jaccard overlap of 50-vocabulary tags",
+    "caption": "sentence-transformers/all-MiniLM-L6-v2 caption-caption cosine, percentile among 1000 random test pairs",
+    "audio": "laion/clap-htsat-unfused caption-audio cosine, percentile among 1000 random test pairs"
+  },
+  "summary": {
+    "rank 1": {
+      "tags": 1.57,
+      "caption": 3.74,
+      "audio": 4.5
+    },
+    "rank 2": {
+      "tags": 1.97,
+      "caption": 3.22,
+      "audio": 4.58
+    },
+    "rank 3": {
+      "tags": 1.53,
+      "caption": 3.47,
+      "audio": 4.06
+    },
+    "random": {
+      "tags": 1.32,
+      "caption": 3.13,
+      "audio": 3.45
+    },
+    "retrieved, all ranks": {
+      "tags": 1.69,
+      "caption": 3.48,
+      "audio": 4.38
+    },
+    "true clip, audio judge": 4.8
+  },
+  "scores": [
+    {
+      "query_ytid": "3bg0iy-ypcw",
+      "candidate_ytid": "0TV9zvfwFhs",
+      "group": "rank 1",
+      "tags": 2.0,
+      "caption": 1.66,
+      "audio": 4.61
+    },
+    {
+      "query_ytid": "3bg0iy-ypcw",
+      "candidate_ytid": "WaddbqEQ1NE",
+      "group": "rank 2",
+      "tags": 2.0,
+      "caption": 2.14,
+      "audio": 4.04
+    },
+    {
+      "query_ytid": "3bg0iy-ypcw",
+      "candidate_ytid": "K-zkbbliQcI",
+      "group": "rank 3",
+      "tags": 1.0,
+      "caption": 4.48,
+      "audio": 4.5
+    },
+    {
+      "query_ytid": "3bg0iy-ypcw",
+      "candidate_ytid": "adYFXYPqo2M",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 1.96,
+      "audio": 3.43
+    },
+    {
+      "query_ytid": "3bg0iy-ypcw",
+      "candidate_ytid": "3otUlQ4wvLY",
+      "group": "random",
+      "tags": 1.67,
+      "caption": 2.66,
+      "audio": 3.45
+    },
+    {
+      "query_ytid": "3bg0iy-ypcw",
+      "candidate_ytid": "iQJvAXOohoU",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 1.32,
+      "audio": 2.4
+    },
+    {
+      "query_ytid": "3nbB3F-OdSM",
+      "candidate_ytid": "JrOV2Xz2djA",
+      "group": "rank 1",
+      "tags": 4.33,
+      "caption": 5.0,
+      "audio": 4.98
+    },
+    {
+      "query_ytid": "3nbB3F-OdSM",
+      "candidate_ytid": "7OgH3B49_E4",
+      "group": "rank 2",
+      "tags": 2.33,
+      "caption": 3.8,
+      "audio": 4.94
+    },
+    {
+      "query_ytid": "3nbB3F-OdSM",
+      "candidate_ytid": "Wu-Oh9OJIlI",
+      "group": "rank 3",
+      "tags": 2.6,
+      "caption": 4.47,
+      "audio": 4.97
+    },
+    {
+      "query_ytid": "3nbB3F-OdSM",
+      "candidate_ytid": "3bg0iy-ypcw",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 4.02,
+      "audio": 3.82
+    },
+    {
+      "query_ytid": "3nbB3F-OdSM",
+      "candidate_ytid": "dNOHIxD0j_Q",
+      "group": "random",
+      "tags": 2.0,
+      "caption": 4.77,
+      "audio": 4.98
+    },
+    {
+      "query_ytid": "3nbB3F-OdSM",
+      "candidate_ytid": "pKDnn0CBIe0",
+      "group": "random",
+      "tags": 1.57,
+      "caption": 4.72,
+      "audio": 2.87
+    },
+    {
+      "query_ytid": "4--05CAaDsg",
+      "candidate_ytid": "-pUfYFcsgG4",
+      "group": "rank 1",
+      "tags": 1.0,
+      "caption": 3.98,
+      "audio": 2.17
+    },
+    {
+      "query_ytid": "4--05CAaDsg",
+      "candidate_ytid": "-i9gpG3vPwA",
+      "group": "rank 2",
+      "tags": 1.44,
+      "caption": 3.65,
+      "audio": 4.36
+    },
+    {
+      "query_ytid": "4--05CAaDsg",
+      "candidate_ytid": "lR8am4rK7qQ",
+      "group": "rank 3",
+      "tags": 2.5,
+      "caption": 3.65,
+      "audio": 3.91
+    },
+    {
+      "query_ytid": "4--05CAaDsg",
+      "candidate_ytid": "TKSFbf-wQ8I",
+      "group": "random",
+      "tags": 1.36,
+      "caption": 4.67,
+      "audio": 1.27
+    },
+    {
+      "query_ytid": "4--05CAaDsg",
+      "candidate_ytid": "yFh6J72KnCM",
+      "group": "random",
+      "tags": 1.4,
+      "caption": 3.42,
+      "audio": 2.56
+    },
+    {
+      "query_ytid": "4--05CAaDsg",
+      "candidate_ytid": "fhs7AkJsYao",
+      "group": "random",
+      "tags": 1.57,
+      "caption": 1.76,
+      "audio": 2.55
+    },
+    {
+      "query_ytid": "AobHGHJSd-s",
+      "candidate_ytid": "kbquMoJrhC0",
+      "group": "rank 1",
+      "tags": 1.0,
+      "caption": 3.38,
+      "audio": 4.5
+    },
+    {
+      "query_ytid": "AobHGHJSd-s",
+      "candidate_ytid": "k3A5xX8yfig",
+      "group": "rank 2",
+      "tags": 1.0,
+      "caption": 2.73,
+      "audio": 4.94
+    },
+    {
+      "query_ytid": "AobHGHJSd-s",
+      "candidate_ytid": "7wSTdp1hiTA",
+      "group": "rank 3",
+      "tags": 1.0,
+      "caption": 3.34,
+      "audio": 2.26
+    },
+    {
+      "query_ytid": "AobHGHJSd-s",
+      "candidate_ytid": "SNhfvhWPXNc",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 3.02,
+      "audio": 4.45
+    },
+    {
+      "query_ytid": "AobHGHJSd-s",
+      "candidate_ytid": "jhQpTVVUQ9E",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 4.09,
+      "audio": 4.8
+    },
+    {
+      "query_ytid": "AobHGHJSd-s",
+      "candidate_ytid": "6VJ_auuKzss",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 4.17,
+      "audio": 4.42
+    },
+    {
+      "query_ytid": "No4Bi6mG1J8",
+      "candidate_ytid": "fXhN3_gGpQw",
+      "group": "rank 1",
+      "tags": 2.09,
+      "caption": 3.9,
+      "audio": 4.87
+    },
+    {
+      "query_ytid": "No4Bi6mG1J8",
+      "candidate_ytid": "0m9-5BkL4Mc",
+      "group": "rank 2",
+      "tags": 2.14,
+      "caption": 2.67,
+      "audio": 4.96
+    },
+    {
+      "query_ytid": "No4Bi6mG1J8",
+      "candidate_ytid": "EUNTykrvpok",
+      "group": "rank 3",
+      "tags": 2.09,
+      "caption": 4.92,
+      "audio": 4.94
+    },
+    {
+      "query_ytid": "No4Bi6mG1J8",
+      "candidate_ytid": "RS43EP1EXz4",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 2.18,
+      "audio": 4.33
+    },
+    {
+      "query_ytid": "No4Bi6mG1J8",
+      "candidate_ytid": "Jdy08IPLKdw",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 1.96,
+      "audio": 4.93
+    },
+    {
+      "query_ytid": "No4Bi6mG1J8",
+      "candidate_ytid": "ABSLnckbB8w",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 2.16,
+      "audio": 3.46
+    },
+    {
+      "query_ytid": "Nz4iLzJBTBo",
+      "candidate_ytid": "PE1ges9nn6A",
+      "group": "rank 1",
+      "tags": 1.33,
+      "caption": 4.83,
+      "audio": 4.63
+    },
+    {
+      "query_ytid": "Nz4iLzJBTBo",
+      "candidate_ytid": "CWQvCCRuU6k",
+      "group": "rank 2",
+      "tags": 1.0,
+      "caption": 2.22,
+      "audio": 4.22
+    },
+    {
+      "query_ytid": "Nz4iLzJBTBo",
+      "candidate_ytid": "2BGzxAuetOA",
+      "group": "rank 3",
+      "tags": 1.0,
+      "caption": 4.82,
+      "audio": 4.23
+    },
+    {
+      "query_ytid": "Nz4iLzJBTBo",
+      "candidate_ytid": "mnSP_ONVS7k",
+      "group": "random",
+      "tags": 1.36,
+      "caption": 2.88,
+      "audio": 4.14
+    },
+    {
+      "query_ytid": "Nz4iLzJBTBo",
+      "candidate_ytid": "a2QxlP5DAYQ",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 2.63,
+      "audio": 2.47
+    },
+    {
+      "query_ytid": "Nz4iLzJBTBo",
+      "candidate_ytid": "L_ghM-NrH58",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 1.76,
+      "audio": 2.5
+    },
+    {
+      "query_ytid": "aYoRcnmz6ZE",
+      "candidate_ytid": "3bg0iy-ypcw",
+      "group": "rank 1",
+      "tags": 1.0,
+      "caption": 3.35,
+      "audio": 4.84
+    },
+    {
+      "query_ytid": "aYoRcnmz6ZE",
+      "candidate_ytid": "aYoRcnmz6ZE",
+      "group": "rank 2",
+      "tags": 5.0,
+      "caption": 5.0,
+      "audio": 4.2
+    },
+    {
+      "query_ytid": "aYoRcnmz6ZE",
+      "candidate_ytid": "nqd7mXvHupU",
+      "group": "rank 3",
+      "tags": 1.27,
+      "caption": 2.78,
+      "audio": 2.96
+    },
+    {
+      "query_ytid": "aYoRcnmz6ZE",
+      "candidate_ytid": "OPimGlHcSRQ",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 4.15,
+      "audio": 1.68
+    },
+    {
+      "query_ytid": "aYoRcnmz6ZE",
+      "candidate_ytid": "3tyb0cXoX2g",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 4.58,
+      "audio": 3.54
+    },
+    {
+      "query_ytid": "aYoRcnmz6ZE",
+      "candidate_ytid": "BsLFQV8HVZE",
+      "group": "random",
+      "tags": 1.4,
+      "caption": 4.86,
+      "audio": 4.56
+    },
+    {
+      "query_ytid": "dMAp3dvs3kE",
+      "candidate_ytid": "qDiTICmdUQg",
+      "group": "rank 1",
+      "tags": 1.0,
+      "caption": 4.52,
+      "audio": 4.62
+    },
+    {
+      "query_ytid": "dMAp3dvs3kE",
+      "candidate_ytid": "RoDS0k7qrIo",
+      "group": "rank 2",
+      "tags": 1.0,
+      "caption": 3.05,
+      "audio": 4.56
+    },
+    {
+      "query_ytid": "dMAp3dvs3kE",
+      "candidate_ytid": "U-UF93NA3ko",
+      "group": "rank 3",
+      "tags": 1.4,
+      "caption": 2.38,
+      "audio": 4.61
+    },
+    {
+      "query_ytid": "dMAp3dvs3kE",
+      "candidate_ytid": "nAKUDXMeWeQ",
+      "group": "random",
+      "tags": 2.0,
+      "caption": 2.12,
+      "audio": 3.13
+    },
+    {
+      "query_ytid": "dMAp3dvs3kE",
+      "candidate_ytid": "pKDnn0CBIe0",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 3.87,
+      "audio": 2.49
+    },
+    {
+      "query_ytid": "dMAp3dvs3kE",
+      "candidate_ytid": "2RU4CSDzS-g",
+      "group": "random",
+      "tags": 2.0,
+      "caption": 4.14,
+      "audio": 4.8
+    },
+    {
+      "query_ytid": "iFSaNmZyPQo",
+      "candidate_ytid": "ClNTn1wtq7E",
+      "group": "rank 1",
+      "tags": 1.0,
+      "caption": 4.22,
+      "audio": 4.87
+    },
+    {
+      "query_ytid": "iFSaNmZyPQo",
+      "candidate_ytid": "fsTVRca31nI",
+      "group": "rank 2",
+      "tags": 1.8,
+      "caption": 4.53,
+      "audio": 4.97
+    },
+    {
+      "query_ytid": "iFSaNmZyPQo",
+      "candidate_ytid": "nqd7mXvHupU",
+      "group": "rank 3",
+      "tags": 1.0,
+      "caption": 1.36,
+      "audio": 3.81
+    },
+    {
+      "query_ytid": "iFSaNmZyPQo",
+      "candidate_ytid": "dVUgd8ot6BE",
+      "group": "random",
+      "tags": 1.67,
+      "caption": 4.23,
+      "audio": 4.48
+    },
+    {
+      "query_ytid": "iFSaNmZyPQo",
+      "candidate_ytid": "9EUXyEQZqLo",
+      "group": "random",
+      "tags": 2.0,
+      "caption": 1.06,
+      "audio": 4.56
+    },
+    {
+      "query_ytid": "iFSaNmZyPQo",
+      "candidate_ytid": "hPIh5RYA-5M",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 3.25,
+      "audio": 1.49
+    },
+    {
+      "query_ytid": "pG6yeC3yUY4",
+      "candidate_ytid": "-r2-9oyIzkQ",
+      "group": "rank 1",
+      "tags": 1.0,
+      "caption": 2.56,
+      "audio": 4.91
+    },
+    {
+      "query_ytid": "pG6yeC3yUY4",
+      "candidate_ytid": "jWQu301CEp8",
+      "group": "rank 2",
+      "tags": 2.0,
+      "caption": 2.45,
+      "audio": 4.62
+    },
+    {
+      "query_ytid": "pG6yeC3yUY4",
+      "candidate_ytid": "zrrM6Qg2Dwg",
+      "group": "rank 3",
+      "tags": 1.44,
+      "caption": 2.54,
+      "audio": 4.38
+    },
+    {
+      "query_ytid": "pG6yeC3yUY4",
+      "candidate_ytid": "xx3nnVzGXa0",
+      "group": "random",
+      "tags": 2.33,
+      "caption": 4.14,
+      "audio": 2.5
+    },
+    {
+      "query_ytid": "pG6yeC3yUY4",
+      "candidate_ytid": "OFP5MYVDa4g",
+      "group": "random",
+      "tags": 1.0,
+      "caption": 1.21,
+      "audio": 2.97
+    },
+    {
+      "query_ytid": "pG6yeC3yUY4",
+      "candidate_ytid": "rmKh9uaikTU",
+      "group": "random",
+      "tags": 1.31,
+      "caption": 2.19,
+      "audio": 4.48
+    }
+  ]
+}
