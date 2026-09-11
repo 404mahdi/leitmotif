@@ -61,11 +61,14 @@ def style() -> None:
 
 
 def save(fig, name: str) -> None:
+    """PNG and PDF in results/plots/, plus a PDF copy in report/figures/ so the report folder compiles on its own."""
+    report_figures = ROOT / "report" / "figures"
     PLOTS.mkdir(parents=True, exist_ok=True)
-    for ext in ("png", "pdf"):
-        fig.savefig(PLOTS / f"{name}.{ext}", dpi=220, bbox_inches="tight")
+    report_figures.mkdir(parents=True, exist_ok=True)
+    for path in (PLOTS / f"{name}.png", PLOTS / f"{name}.pdf", report_figures / f"{name}.pdf"):
+        fig.savefig(path, dpi=220, bbox_inches="tight")
     plt.close(fig)
-    print(f"wrote results/plots/{name}.png and .pdf")
+    print(f"wrote results/plots/{name}.png/.pdf and report/figures/{name}.pdf")
 
 
 def load_json(path):
@@ -130,17 +133,23 @@ def stage1_curves() -> None:
     save(fig, "stage1_curves")
 
 
+STAGE2_LABELS = {
+    "baseline_majority_genre": "Majority class",
+    "baseline_cnn_genre": "CNN on log-mel",
+    "stage2_graphsage_chord": "GraphSAGE, chord graph",
+    "stage2_gat_chord": "GAT, chord graph",
+    "stage2_graphsage_segment": "GraphSAGE, segment graph",
+    "stage2_gat_segment": "GAT, segment graph",
+    "stage2_graphsage_segment_crop50": "GraphSAGE, segment graph + crops",
+    "stage2_gat_segment_crop50": "GAT, segment graph + crops",
+    "stage2_graphsage_segment_cnn_nodes": "GraphSAGE + CNN node features",
+    "stage2_gat_segment_cnn_nodes": "GAT + CNN node features",
+}
+
+
 def stage2_comparison(metrics: dict) -> None:
-    candidates = [
-        ("Majority class", "baseline_majority_genre"),
-        ("CNN on log-mel", "baseline_cnn_genre"),
-        ("GraphSAGE, segment graph", "stage2_graphsage_segment"),
-        ("GAT, segment graph", "stage2_gat_segment"),
-        ("GraphSAGE, chord graph", "stage2_graphsage_chord"),
-        ("GAT, chord graph", "stage2_gat_chord"),
-    ]
-    entries = [(label, metrics[key]) for label, key in candidates if key in metrics]
-    n_baselines = sum(key.startswith("baseline_") for _, key in candidates if key in metrics)
+    entries = [(label, metrics[key]) for key, label in STAGE2_LABELS.items() if key in metrics]
+    n_baselines = sum(key.startswith("baseline_") and key in metrics for key in STAGE2_LABELS)
     comparison_figure("stage2_comparison", entries, [("accuracy", "Accuracy"), ("macro_f1", "Macro-F1")], n_baselines)
 
 
@@ -162,7 +171,7 @@ def stage2_confusion(metrics: dict) -> None:
     ax.grid(False)
     ax.set_xlabel("Predicted genre")
     ax.set_ylabel("True genre")
-    ax.set_title(f"{name.removeprefix('stage2_').replace('_', ', ')}: test confusion", loc="left")
+    ax.set_title(f"{STAGE2_LABELS.get(name, name)}: test confusion", loc="left")
     fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label="Share of the true genre")
     save(fig, "stage2_confusion")
 
@@ -245,40 +254,60 @@ def stage4_retrieval(metrics: dict) -> None:
     save(fig, "stage4_retrieval")
 
 
+def draw_arcs(ax, times: np.ndarray, edge_index: np.ndarray, edge_attr: np.ndarray, threshold: float,
+              node_values: np.ndarray | None = None) -> Normalize:
+    """Draw a segment graph as an arc diagram on `ax` and return the colour scale of the arcs.
+
+    Nodes sit on a time axis joined by the temporal chain; each similarity edge is an arc coloured by its
+    cosine similarity. When `node_values` is given, nodes are shaded by it (e.g. attention per segment).
+    """
+    src, dst = edge_index
+    similar = edge_attr[:, 1] > 0
+    norm = Normalize(threshold, 1.0)
+    ax.plot(times, np.zeros_like(times), color=AXIS, linewidth=1.2, zorder=1)
+    for i, j, c in sorted(zip(src[similar], dst[similar], edge_attr[similar, 2]), key=lambda edge: edge[2]):
+        if i < j:
+            x0, x1 = times[i], times[j]
+            curve = Path([(x0, 0), ((x0 + x1) / 2, x1 - x0), (x1, 0)], [Path.MOVETO, Path.CURVE3, Path.CURVE3])
+            ax.add_patch(PathPatch(curve, facecolor="none", edgecolor=BLUE(norm(c)), linewidth=1.1, zorder=2))
+    if node_values is None:
+        ax.scatter(times, np.zeros_like(times), s=14, color=SERIES[0], edgecolors=SURFACE, linewidths=0.6, zorder=3)
+    else:
+        shade = BLUE(0.15 + 0.85 * node_values / max(float(node_values.max()), 1e-8))
+        ax.scatter(times, np.zeros_like(times), s=34, color=shade, edgecolors=SURFACE, linewidths=0.8, zorder=3)
+    ax.set_xlim(times[0] - 0.5, times[-1] + 0.5)
+    ax.set_ylim(-0.6, (times[-1] - times[0]) / 2 + 0.5)
+    ax.set_yticks([])
+    ax.spines["left"].set_visible(False)
+    ax.grid(False)
+    return norm
+
+
 def song_arc_diagram(dataset: str = "fma_small") -> None:
-    """Draw one track's segment graph as an arc diagram: arcs join moments that sound alike."""
+    """One track's segment graph as an arc diagram: arcs join moments that sound alike."""
     cfg = load_config()
     path = resolve(cfg["paths"]["processed"]) / dataset / "segment_graphs.pt"
     if not path.exists():
         return
     graphs = torch.load(path, weights_only=False)
 
-    def long_range_links(g) -> int:
+    def similarity_pairs(g) -> tuple[int, int]:
+        """(similarity edges, those joining moments more than 5 s apart), counting each pair once."""
         src, dst = g.edge_index
         similar = (g.edge_attr[:, 1] > 0) & (src < dst)
-        return int(((g.segment_seconds[dst[similar], 0] - g.segment_seconds[src[similar], 0]) > 5).sum())
+        gaps = g.segment_seconds[dst[similar], 0] - g.segment_seconds[src[similar], 0]
+        return int(similar.sum()), int((gaps > 5).sum())
 
-    key = max(graphs, key=lambda k: long_range_links(graphs[k]))
+    # A readable example: clear long-range repetition, but not a clip where every moment matches every other
+    counts = {k: similarity_pairs(g) for k, g in graphs.items()}
+    readable = [k for k, (pairs, _) in counts.items() if 20 <= pairs <= 45]
+    key = max(readable or counts, key=lambda k: counts[k][1])
     g = graphs[key]
-    times = g.segment_seconds.mean(dim=1).numpy()
-    src, dst = g.edge_index.numpy()
-    similar = g.edge_attr[:, 1].numpy() > 0
-    cosine = g.edge_attr[:, 2].numpy()
-    norm = Normalize(cfg["graph"]["similarity_threshold"], 1.0)
-
     fig, ax = plt.subplots(figsize=(7.6, 2.9))
-    ax.plot(times, np.zeros_like(times), color=AXIS, linewidth=1.2, zorder=1)
-    for i, j, c in sorted(zip(src[similar], dst[similar], cosine[similar]), key=lambda edge: edge[2]):
-        if i < j:
-            x0, x1 = times[i], times[j]
-            curve = Path([(x0, 0), ((x0 + x1) / 2, x1 - x0), (x1, 0)], [Path.MOVETO, Path.CURVE3, Path.CURVE3])
-            ax.add_patch(PathPatch(curve, facecolor="none", edgecolor=BLUE(norm(c)), linewidth=1.1, zorder=2))
-    ax.scatter(times, np.zeros_like(times), s=14, color=SERIES[0], edgecolors=SURFACE, linewidths=0.6, zorder=3)
-    ax.set_xlim(times[0] - 0.5, times[-1] + 0.5)
-    ax.set_ylim(-0.6, (times[-1] - times[0]) / 2 + 0.5)
-    ax.set_yticks([])
-    ax.spines["left"].set_visible(False)
-    ax.grid(False)
+    norm = draw_arcs(
+        ax, g.segment_seconds.mean(dim=1).numpy(), g.edge_index.numpy(), g.edge_attr.numpy(),
+        cfg["graph"]["similarity_threshold"],
+    )
     ax.set_xlabel("Time in the clip (s)")
     title = f"Segment graph of FMA track {key}"
     if dataset == "fma_small":
@@ -289,6 +318,80 @@ def song_arc_diagram(dataset: str = "fma_small") -> None:
     ax.set_title(title + ": arcs join segments that sound alike", loc="left")
     fig.colorbar(ScalarMappable(norm, BLUE), ax=ax, fraction=0.03, pad=0.01, label="Cosine similarity")
     save(fig, "song_arc_diagram")
+
+
+STOPWORDS = {
+    "the", "and", "with", "this", "that", "are", "its", "has", "have", "for", "from", "over", "while", "there", "which",
+    "into", "can", "song", "music", "recording", "features", "sounds", "like", "also", "some", "you", "would", "hear",
+    "one", "being", "playing", "played", "heard", "background",
+}
+
+
+def case_studies(name: str = "stage3_cross_attention_masked_pretrained", n: int = 3) -> None:
+    """Three test clips: caption words against segments under the fusion model's attention, plus the clip's graph."""
+    if not (CHECKPOINTS / f"{name}.pt").exists():
+        return
+    from sklearn.metrics import average_precision_score
+
+    from src.inference import Leitmotif
+
+    lm = Leitmotif(fusion=name)
+    threshold = lm.cfg["graph"]["similarity_threshold"]
+    ids = json.loads((CHECKPOINTS / f"{name}_test_ids.json").read_text(encoding="utf-8"))
+    probs = np.load(CHECKPOINTS / f"{name}_test_probs.npy")
+    truth = np.array([[tag in lm.clips.at[ytid, "tags"] for tag in lm.vocab] for ytid in ids], dtype=int)
+
+    # Clips the model gets right, each led by a different tag so the three cases differ
+    scored = {i: average_precision_score(truth[i], probs[i]) for i in np.where(truth.sum(axis=1) >= 3)[0]}
+    chosen, leads = [], set()
+    for i in sorted(scored, key=scored.get, reverse=True):
+        lead = lm.vocab[int(np.argmax(probs[i] * truth[i]))]
+        if lead not in leads:
+            chosen.append(i)
+            leads.add(lead)
+        if len(chosen) == n:
+            break
+
+    fig, axes = plt.subplots(n, 2, figsize=(8.2, 2.6 * n), gridspec_kw={"width_ratios": [1.3, 1]})
+    records = []
+    for row, i in enumerate(chosen):
+        ytid = ids[i]
+        clip = lm.clips.loc[ytid]
+        explanation = lm.explain(clip["audio_path"], clip["caption"])
+        tokens = explanation["tokens"]
+        words = [k for k, tok in enumerate(tokens) if tok.isalpha() and len(tok) > 2 and tok not in STOPWORDS]
+        words = sorted(sorted(words, key=lambda k: -explanation["attention"][k].max())[:10])
+        attention = explanation["attention"][words]
+        starts = explanation["segment_seconds"][:, 0]
+        predicted = [lm.vocab[k] for k in np.argsort(-probs[i])[:4]]
+
+        heat = axes[row, 0]
+        heat.imshow(attention, aspect="auto", cmap=BLUE, vmin=0)
+        heat.set_yticks(range(len(words)), [tokens[k] for k in words], fontsize=7)
+        heat.set_xticks(range(0, len(starts), 3), [f"{s:.0f}s" for s in starts[::3]], fontsize=7)
+        heat.tick_params(length=0)
+        heat.grid(False)
+        heat.set_title(f"Clip {ytid}. Predicted: {', '.join(predicted)}", loc="left", fontsize=8)
+
+        arcs = axes[row, 1]
+        draw_arcs(arcs, explanation["segment_seconds"].mean(axis=1), explanation["edge_index"],
+                  explanation["edge_attr"], threshold, node_values=attention.mean(axis=0))
+        arcs.set_title("Segment graph, nodes shaded by attention", loc="left", fontsize=8)
+        records.append({
+            "ytid": ytid,
+            "caption": clip["caption"],
+            "true_tags": [t for t in clip["tags"] if t in lm.vocab],
+            "predicted_top4": predicted,
+            "clip_average_precision": round(float(scored[i]), 3),
+            "most_attended_segment_per_word": {
+                tokens[k]: f"{starts[int(np.argmax(explanation['attention'][k]))]:.1f}s" for k in words
+            },
+        })
+    axes[-1, 0].set_xlabel("Segment start")
+    axes[-1, 1].set_xlabel("Time (s)")
+    fig.tight_layout()
+    save(fig, "case_studies")
+    (RESULTS / "case_studies.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
 
 
 def main() -> None:
@@ -302,6 +405,7 @@ def main() -> None:
     tsne_fused()
     stage4_retrieval(metrics)
     song_arc_diagram()
+    case_studies()
 
 
 if __name__ == "__main__":

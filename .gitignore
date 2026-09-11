@@ -15,6 +15,14 @@ data/processed/*
 !data/processed/.gitkeep
 !data/processed/samples/
 
+# LaTeX build files (the report is compiled on Overleaf; figures/ is committed)
+report/*.aux
+report/*.bbl
+report/*.blg
+report/*.log
+report/*.out
+report/*.synctex.gz
+
 # Training outputs
 checkpoints/
 runs/
