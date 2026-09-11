@@ -5,7 +5,7 @@ description = "Understanding musical context with graph neural networks over son
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = "MIT"
-authors = [{ name = "Mahdi" }]
+authors = [{ name = "Mahdi Hasan" }]
 dependencies = [
     "librosa>=0.10.2",
     "matplotlib>=3.8",
@@ -23,6 +23,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+demo = [
+    "gradio>=5",
+]
 dev = ["ipykernel>=6.29", "ipywidgets>=8.1"]
 
 [tool.uv]
