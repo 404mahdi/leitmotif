@@ -32,6 +32,7 @@ MUTED = "#898781"
 GRID = "#e1e0d9"
 AXIS = "#c3c2b7"
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]
+NEGATIVE = "#e34948"  # the red pole of the blue-red diverging pair, for decreases
 BLUE = LinearSegmentedColormap.from_list(
     "blue", ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 )
@@ -183,6 +184,52 @@ def stage3_ablation(metrics: dict) -> None:
         if run:
             entries.append((label, run))
     comparison_figure("stage3_ablation", entries, [("macro_f1", "Macro-F1"), ("auc_pr", "AUC-PR")], 0)
+    stage3_tag_gains(metrics)
+
+
+def stage3_tag_gains(metrics: dict, top: int = 8) -> None:
+    """Per-tag change in test AP when the audio graph is fused with the caption, against BERT alone."""
+    from sklearn.metrics import average_precision_score
+
+    from src.datasets import load_musiccaps, multi_hot
+
+    fused = [v for v in ("cross_attention", "concat") if f"stage3_{v}_masked_pretrained" in metrics]
+    if "stage3_bert_only_masked_pretrained" not in metrics or not fused:
+        return
+    variant = max(fused, key=lambda v: metrics[f"stage3_{v}_masked_pretrained"]["test"]["macro_f1"])
+    cfg = load_config()
+    vocab = list(json.loads((resolve(cfg["paths"]["splits"]) / "musiccaps_tags.json").read_text(encoding="utf-8")))
+    clips = load_musiccaps(cfg).set_index("ytid")
+    ids = json.loads((CHECKPOINTS / f"stage3_{variant}_masked_pretrained_test_ids.json").read_text(encoding="utf-8"))
+    targets = np.stack([multi_hot(clips.at[ytid, "tags"], vocab) for ytid in ids])
+
+    def per_tag_ap(name: str) -> np.ndarray:
+        probs = np.load(CHECKPOINTS / f"{name}_test_probs.npy")
+        row = {ytid: i for i, ytid in enumerate(json.loads((CHECKPOINTS / f"{name}_test_ids.json").read_text(encoding="utf-8")))}
+        probs = probs[[row[ytid] for ytid in ids]]
+        return np.array([average_precision_score(targets[:, k], probs[:, k]) for k in range(len(vocab))])
+
+    delta = per_tag_ap(f"stage3_{variant}_masked_pretrained") - per_tag_ap("stage3_bert_only_masked_pretrained")
+    order = np.argsort(delta)
+    chosen = np.concatenate([order[:top], order[-top:]])  # largest losses, then largest gains
+    fig, ax = plt.subplots(figsize=(6.2, 0.28 * len(chosen) + 1.1))
+    y = np.arange(len(chosen))
+    # Diverging encoding: blue for tags the audio graph helps, red for tags it hurts, grey zero line
+    ax.barh(y, delta[chosen], height=0.6, color=[SERIES[0] if delta[k] > 0 else NEGATIVE for k in chosen])
+    ax.axvline(0, color=AXIS, linewidth=0.8)
+    limit = float(np.abs(delta[chosen]).max()) * 1.4
+    for yi, k in zip(y, chosen):
+        value = float(delta[k])
+        offset = limit * 0.02 if value >= 0 else -limit * 0.02
+        ax.text(value + offset, yi, f"{value:+.2f}", va="center", ha="left" if value >= 0 else "right", fontsize=7,
+                color=INK_SECONDARY)
+    ax.set_xlim(-limit, limit)
+    ax.set_yticks(y, [vocab[k] for k in chosen])
+    ax.tick_params(axis="y", length=0, labelsize=8, labelcolor=INK_SECONDARY)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel("Change in test average precision")
+    ax.set_title(f"Adding the audio graph: {VARIANT_NAMES[variant].lower()} minus BERT only", loc="left")
+    save(fig, "stage3_tag_gains")
 
 
 def dominant_labels(tag_lists: list[list[str]], candidates: list[str], k: int = 3) -> tuple[list[str], list[str]]:
@@ -227,7 +274,9 @@ def tsne_fused() -> None:
         for spine in ax.spines.values():
             spine.set_visible(False)
         ax.set_title(title, loc="left")
-        ax.legend(loc="lower left", markerscale=1.2, handletextpad=0.2)
+        # Legend under the axes, where it can't cover the densest clusters
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=4, markerscale=1.2, handletextpad=0.2,
+                  columnspacing=1.0)
     fig.suptitle("t-SNE of the fused representation z (test clips)", x=0.01, ha="left", fontsize=10)
     fig.tight_layout()
     save(fig, "stage3_tsne")
@@ -246,7 +295,7 @@ def stage4_retrieval(metrics: dict) -> None:
         values = [run["test"][f"{direction}_R@{k}"] for k in ks]
         ax.bar(positions, values, width=width, color=SERIES[i], label=label)
         for position, value in zip(positions, values):
-            ax.text(position, value + 0.004, f"{value:.2f}", ha="center", va="bottom", fontsize=7, color=INK_SECONDARY)
+            ax.text(position, value + 0.002, f"{value:.3f}", ha="center", va="bottom", fontsize=7, color=INK_SECONDARY)
     ax.set_xticks(x, [f"R@{k}" for k in ks])
     ax.set_ylabel("Recall on the test split")
     ax.grid(axis="x", visible=False)
@@ -321,9 +370,12 @@ def song_arc_diagram(dataset: str = "fma_small") -> None:
 
 
 STOPWORDS = {
-    "the", "and", "with", "this", "that", "are", "its", "has", "have", "for", "from", "over", "while", "there", "which",
-    "into", "can", "song", "music", "recording", "features", "sounds", "like", "also", "some", "you", "would", "hear",
-    "one", "being", "playing", "played", "heard", "background",
+    "the", "and", "with", "this", "that", "these", "those", "are", "was", "were", "been", "its", "his", "her", "their",
+    "they", "has", "have", "for", "from", "over", "while", "there", "which", "who", "into", "onto", "out", "can", "could",
+    "would", "may", "might", "also", "very", "some", "all", "one", "two", "other", "such", "than", "then", "through",
+    "throughout", "you", "your", "way", "time", "used", "probably", "consists", "contains", "song", "songs", "music",
+    "track", "recording", "features", "featuring", "sound", "sounds", "like", "hear", "heard", "being", "playing",
+    "played", "plays", "background", "foreground", "catch",
 }
 
 
@@ -368,7 +420,7 @@ def case_studies(name: str = "stage3_cross_attention_masked_pretrained", n: int 
         heat = axes[row, 0]
         heat.imshow(attention, aspect="auto", cmap=BLUE, vmin=0)
         heat.set_yticks(range(len(words)), [tokens[k] for k in words], fontsize=7)
-        heat.set_xticks(range(0, len(starts), 3), [f"{s:.0f}s" for s in starts[::3]], fontsize=7)
+        heat.set_xticks(range(0, len(starts), 4), [f"{s:g}s" for s in starts[::4]], fontsize=7)
         heat.tick_params(length=0)
         heat.grid(False)
         heat.set_title(f"Clip {ytid}. Predicted: {', '.join(predicted)}", loc="left", fontsize=8)

@@ -58,12 +58,18 @@ def warmup_then_linear_decay(optimizer: torch.optim.Optimizer, total_steps: int,
     return torch.optim.lr_scheduler.LambdaLR(optimizer, scale)
 
 
-def adamw_with_bert_groups(model: nn.Module, bert_lr: float, lr: float, weight_decay: float = 0.01):
-    """A small learning rate for pretrained BERT layers and a larger one for everything trained from scratch."""
-    bert = [p for n, p in model.named_parameters() if n.startswith("text.") and p.requires_grad]
-    rest = [p for n, p in model.named_parameters() if not n.startswith("text.") and p.requires_grad]
-    groups = [group for group in ({"params": bert, "lr": bert_lr}, {"params": rest, "lr": lr}) if group["params"]]
-    return torch.optim.AdamW(groups, weight_decay=weight_decay)
+def adamw_with_bert_groups(
+    model: nn.Module, bert_lr: float, lr: float, graph_lr: float | None = None, weight_decay: float = 0.01
+):
+    """Separate learning rates for pretrained BERT layers (`text.`), the graph encoder (`graph.`) and new layers."""
+    groups = {"text.": [], "graph.": [], "": []}
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            groups[next((prefix for prefix in ("text.", "graph.") if name.startswith(prefix)), "")].append(param)
+    rates = {"text.": bert_lr, "graph.": lr if graph_lr is None else graph_lr, "": lr}
+    return torch.optim.AdamW(
+        [{"params": params, "lr": rates[prefix]} for prefix, params in groups.items() if params], weight_decay=weight_decay
+    )
 
 
 @torch.no_grad()
@@ -476,7 +482,7 @@ def fusion(cfg: dict, args: argparse.Namespace) -> str:
         args.variant, cfg["text"]["model"], encoder, len(vocab),
         tcfg["dim"], tcfg["heads"], tcfg["dropout"], tcfg["trainable_bert_layers"],
     ).to(DEVICE)
-    optimizer = adamw_with_bert_groups(model, tcfg["bert_lr"], tcfg["lr"])
+    optimizer = adamw_with_bert_groups(model, tcfg["bert_lr"], tcfg["lr"], tcfg.get("graph_lr"))
     scheduler = warmup_then_linear_decay(optimizer, tcfg["epochs"] * len(loaders["train"]))
 
     def step(model, batch):
@@ -582,7 +588,7 @@ def contrastive(cfg: dict, args: argparse.Namespace) -> str:
     model = DualEncoder(
         cfg["text"]["model"], encoder, tcfg["dim"], tcfg["temperature"], tcfg["trainable_bert_layers"]
     ).to(DEVICE)
-    optimizer = adamw_with_bert_groups(model, tcfg["bert_lr"], tcfg["lr"])
+    optimizer = adamw_with_bert_groups(model, tcfg["bert_lr"], tcfg["lr"], tcfg.get("graph_lr"))
     scheduler = warmup_then_linear_decay(optimizer, tcfg["epochs"] * len(loaders["train"]))
 
     def step(model, batch):
