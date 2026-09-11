@@ -56,13 +56,20 @@ class MelCNN(nn.Module):
 
 
 class MelDataset(torch.utils.data.Dataset):
-    """Rows of a (possibly memory-mapped) float16 spectrogram array, paired with integer labels."""
+    """Rows of a (possibly memory-mapped) float16 spectrogram array, paired with integer labels.
 
-    def __init__(self, mel: np.ndarray, rows: list[int], labels: list[int]):
-        self.mel, self.rows, self.labels = mel, rows, labels
+    With `crop`, each item is a random window of that many frames (training-time augmentation).
+    """
+
+    def __init__(self, mel: np.ndarray, rows: list[int], labels: list[int], crop: int | None = None):
+        self.mel, self.rows, self.labels, self.crop = mel, rows, labels, crop
 
     def __len__(self) -> int:
         return len(self.rows)
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, int]:
-        return torch.from_numpy(np.asarray(self.mel[self.rows[i]], dtype=np.float32)), self.labels[i]
+        spectrogram = self.mel[self.rows[i]]
+        if self.crop:
+            start = np.random.randint(0, spectrogram.shape[1] - self.crop + 1)
+            spectrogram = spectrogram[:, start : start + self.crop]
+        return torch.from_numpy(np.asarray(spectrogram, dtype=np.float32)), self.labels[i]

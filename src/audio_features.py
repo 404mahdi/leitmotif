@@ -64,10 +64,23 @@ def segment_bounds(features: Features, seg_cfg: dict) -> np.ndarray:
         edges = np.unique(np.concatenate([[0], beats, [n]]))
         bounds = np.stack([edges[:-1], edges[1:]], axis=1)
         return bounds[bounds[:, 1] - bounds[:, 0] >= 2]  # drop slivers shorter than two frames
-    win = max(1, round(seg_cfg["window_seconds"] * features.frame_rate))
-    hop = max(1, round(seg_cfg["hop_seconds"] * features.frame_rate))
+    win, hop = window_and_hop(seg_cfg, features.frame_rate)
     starts = np.arange(0, max(n - win, 0) + 1, hop)
     return np.stack([starts, np.minimum(starts + win, n)], axis=1)
+
+
+def window_and_hop(seg_cfg: dict, frame_rate: float) -> tuple[int, int]:
+    """Length and hop of fixed segments, in frames."""
+    return max(1, round(seg_cfg["window_seconds"] * frame_rate)), max(1, round(seg_cfg["hop_seconds"] * frame_rate))
+
+
+def segment_patches(log_mel: np.ndarray, n_segments: int, window: int, hop: int) -> np.ndarray:
+    """Cut a (n_mels, T) spectrogram into fixed-window segment patches shaped (n_segments, n_mels, window).
+
+    A window running past the end repeats the last frame, which only happens for clips shorter than one window.
+    """
+    frames = np.minimum(np.arange(n_segments)[:, None] * hop + np.arange(window), log_mel.shape[1] - 1)
+    return np.ascontiguousarray(log_mel[:, frames].transpose(1, 0, 2))
 
 
 def segment_features(features: Features, bounds: np.ndarray) -> dict[str, np.ndarray]:

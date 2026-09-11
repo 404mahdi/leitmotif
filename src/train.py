@@ -4,19 +4,22 @@
     uv run python -m src.train bert_tags --text raw          # stage 1 on captions as written
     uv run python -m src.train bert_tags --text masked       # stage 1 with tag words hidden
     uv run python -m src.train majority_genre                # B1 for genre: always the most common genre
-    uv run python -m src.train cnn_genre                     # B2: CNN on log-mel spectrograms
-    uv run python -m src.train gnn_genre --arch graphsage --graph segment    # stage 2
-    uv run python -m src.train fusion --variant cross_attention --text masked \
-        --pretrained-gnn stage2_graphsage_segment            # stage 3 (also bert_only, gnn_only, concat)
-    uv run python -m src.train contrastive --pretrained-gnn stage2_graphsage_segment    # stage 4
+    uv run python -m src.train cnn_genre [--crop 0.5]        # B2: CNN on log-mel spectrograms
+    uv run python -m src.train gnn_genre --arch graphsage --graph segment [--crop 0.5]    # stage 2
+    uv run python -m src.train gnn_genre --arch gat --graph segment --cnn-nodes           # stage 2, CNN node features
+    uv run python -m src.train fusion --variant cross_attention --text masked --arch gat --cnn-nodes \
+        --pretrained-gnn stage2_gat_segment_cnn_nodes        # stage 3 (also bert_only, gnn_only, concat)
+    uv run python -m src.train contrastive --arch gat --cnn-nodes --pretrained-gnn stage2_gat_segment_cnn_nodes   # stage 4
 
 Each run writes checkpoints/<name>.pt plus <name>_args.json (the arguments and config it used),
 and graph models also write <name>_node_stats.pt so new audio can be normalized the same way.
 """
 
 import argparse
+import copy
 import json
 import math
+import random
 import time
 
 import numpy as np
@@ -27,6 +30,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from src import ROOT
+from src.audio_features import segment_patches, window_and_hop
 from src.evaluate import (
     RESULTS,
     best_threshold,
@@ -141,6 +145,14 @@ def finish_multiclass(name: str, model: nn.Module, step, loaders: dict, history:
     print(json.dumps(metrics["test"], indent=1))
 
 
+def crop_suffix(args: argparse.Namespace) -> str:
+    return f"_crop{round(args.crop * 100)}" if args.crop else ""
+
+
+def segment_window_and_hop(cfg: dict) -> tuple[int, int]:
+    return window_and_hop(cfg["segments"], cfg["audio"]["sample_rate"] / cfg["audio"]["hop_length"])
+
+
 # ---------------------------------------------------------------- MusicCaps tags from text
 
 
@@ -237,13 +249,55 @@ def standardize_nodes(graphs_by_split: dict[str, list]) -> dict[str, torch.Tenso
     return stats
 
 
-def build_graph_encoder(cfg: dict, sample, arch: str, pretrained: str | None = None):
-    """A GraphEncoder sized from config.yaml, optionally initialized from a stage 2 checkpoint."""
-    from src.gnn_model import GraphEncoder
+class RandomTemporalCrop(torch.utils.data.Dataset):
+    """Training augmentation for segment graphs: keep a random run of consecutive segments.
+
+    This is the graph counterpart of cropping a spectrogram in time; evaluation still uses whole clips.
+    """
+
+    def __init__(self, graphs, fraction: float):
+        self.graphs, self.fraction = graphs, fraction
+
+    def __len__(self) -> int:
+        return len(self.graphs)
+
+    def __getitem__(self, i: int):
+        graph = self.graphs[i]
+        keep = min(graph.num_nodes, max(2, round(graph.num_nodes * self.fraction)))
+        start = random.randint(0, graph.num_nodes - keep)
+        mask = torch.zeros(graph.num_nodes, dtype=torch.bool)
+        mask[start : start + keep] = True
+        return graph.subgraph(mask)
+
+
+class SegmentPatches(torch.utils.data.Dataset):
+    """Pair each segment graph with its nodes' log-mel patches, cut from the clip's stored spectrogram on demand.
+
+    Patches go on a shallow copy of the graph, so thousands of 30 s tracks don't keep them in memory between epochs.
+    """
+
+    def __init__(self, graphs: list, rows: list[int], mel: np.ndarray, window: int, hop: int):
+        self.graphs, self.rows, self.mel, self.window, self.hop = graphs, rows, mel, window, hop
+
+    def __len__(self) -> int:
+        return len(self.graphs)
+
+    def __getitem__(self, i: int):
+        graph = copy.copy(self.graphs[i])
+        spectrogram = np.asarray(self.mel[self.rows[i]], dtype=np.float32)
+        graph.patches = torch.from_numpy(segment_patches(spectrogram, graph.num_nodes, self.window, self.hop))
+        return graph
+
+
+def build_graph_encoder(cfg: dict, sample, arch: str, pretrained: str | None = None, cnn_nodes: bool = False):
+    """A GraphEncoder sized from config.yaml, optionally with CNN node features and stage 2 weights."""
+    from src.gnn_model import GraphEncoder, SegmentCNN
 
     gcfg = cfg["train"]["gnn_genre"]
+    segment_cnn = SegmentCNN(gcfg["cnn_nodes_dim"], tuple(gcfg["cnn_nodes_channels"])) if cnn_nodes else None
     encoder = GraphEncoder(
-        sample.num_node_features, gcfg["hidden"], gcfg["layers"], arch, gcfg["dropout"], edge_dim=sample.edge_attr.shape[1]
+        sample.num_node_features, gcfg["hidden"], gcfg["layers"], arch, gcfg["dropout"],
+        edge_dim=sample.edge_attr.shape[1], segment_cnn=segment_cnn,
     )
     if pretrained:
         state = torch.load(CHECKPOINTS / f"{pretrained}.pt", map_location="cpu")
@@ -267,14 +321,18 @@ def cnn_genre(cfg: dict, args: argparse.Namespace) -> str:
     from src.baselines import MelCNN, MelDataset
 
     tcfg = cfg["train"]["cnn_genre"]
+    name = "baseline_cnn_genre" + crop_suffix(args)
     root = resolve(cfg["paths"]["processed"]) / "fma_small"
     ids = json.loads((root / "mel_ids.json").read_text(encoding="utf-8"))
     mel = np.load(root / "mel.npy", mmap_mode="r")
     row_of = {track: row for row, track in enumerate(ids)}
     splits, genres = fma_splits(cfg, ids)
+    crop = int(mel.shape[2] * args.crop) if args.crop else None
     loaders = {
         split: DataLoader(
-            MelDataset(mel, [row_of[t] for t in tracks], labels), batch_size=tcfg["batch_size"], shuffle=split == "train"
+            MelDataset(mel, [row_of[t] for t in tracks], labels, crop=crop if split == "train" else None),
+            batch_size=tcfg["batch_size"],
+            shuffle=split == "train",
         )
         for split, (tracks, labels) in splits.items()
     }
@@ -291,7 +349,6 @@ def cnn_genre(cfg: dict, args: argparse.Namespace) -> str:
         logits, labels = collect(model, step, loaders[split])
         return multiclass_metrics(softmax(logits, axis=1), labels)
 
-    name = "baseline_cnn_genre"
     history, best_epoch = run_epochs(
         name, model, step, nn.CrossEntropyLoss(), loaders, optimizer, scheduler, tcfg["epochs"], evaluate
     )
@@ -304,11 +361,12 @@ def gnn_genre(cfg: dict, args: argparse.Namespace) -> str:
 
     from src.gnn_model import GraphClassifier
 
+    if (args.crop or args.cnn_nodes) and args.graph != "segment":
+        raise SystemExit("--crop and --cnn-nodes need segment graphs, whose nodes are one-second windows in time order")
     tcfg = cfg["train"]["gnn_genre"]
-    name = f"stage2_{args.arch}_{args.graph}"
-    graphs = torch.load(
-        resolve(cfg["paths"]["processed"]) / "fma_small" / f"{args.graph}_graphs.pt", weights_only=False
-    )
+    name = f"stage2_{args.arch}_{args.graph}" + ("_cnn_nodes" if args.cnn_nodes else "") + crop_suffix(args)
+    root = resolve(cfg["paths"]["processed"]) / "fma_small"
+    graphs = torch.load(root / f"{args.graph}_graphs.pt", weights_only=False)
     splits, genres = fma_splits(cfg, graphs.keys())
     graphs_by_split = {}
     for split, (tracks, labels) in splits.items():
@@ -318,15 +376,26 @@ def gnn_genre(cfg: dict, args: argparse.Namespace) -> str:
             data.y = torch.tensor([label])
             graphs_by_split[split].append(data)
     stats = standardize_nodes(graphs_by_split)
-    loaders = {
-        split: GraphLoader(items, batch_size=tcfg["batch_size"], shuffle=split == "train")
-        for split, items in graphs_by_split.items()
-    }
 
-    encoder = build_graph_encoder(cfg, graphs_by_split["train"][0], args.arch)
+    datasets = dict(graphs_by_split)
+    if args.cnn_nodes:
+        mel = np.load(root / "mel.npy", mmap_mode="r")
+        row_of = {track: row for row, track in enumerate(json.loads((root / "mel_ids.json").read_text(encoding="utf-8")))}
+        window, hop = segment_window_and_hop(cfg)
+        datasets = {
+            split: SegmentPatches(graphs_by_split[split], [row_of[t] for t in splits[split][0]], mel, window, hop)
+            for split in SPLITS
+        }
+    if args.crop:
+        datasets["train"] = RandomTemporalCrop(datasets["train"], args.crop)
+    batch_size = tcfg["cnn_nodes_batch_size"] if args.cnn_nodes else tcfg["batch_size"]
+    epochs = args.epochs or (tcfg["cnn_nodes_epochs"] if args.cnn_nodes else tcfg["epochs"])
+    loaders = {split: GraphLoader(datasets[split], batch_size=batch_size, shuffle=split == "train") for split in SPLITS}
+
+    encoder = build_graph_encoder(cfg, graphs_by_split["train"][0], args.arch, cnn_nodes=args.cnn_nodes)
     model = GraphClassifier(encoder, len(genres), tcfg["dropout"]).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=tcfg["lr"], weight_decay=tcfg["weight_decay"])
-    scheduler = warmup_then_linear_decay(optimizer, tcfg["epochs"] * len(loaders["train"]), 0.05)
+    scheduler = warmup_then_linear_decay(optimizer, epochs * len(loaders["train"]), 0.05)
 
     def step(model, batch):
         batch = batch.to(DEVICE)
@@ -337,7 +406,7 @@ def gnn_genre(cfg: dict, args: argparse.Namespace) -> str:
         return multiclass_metrics(softmax(logits, axis=1), labels)
 
     history, best_epoch = run_epochs(
-        name, model, step, nn.CrossEntropyLoss(), loaders, optimizer, scheduler, tcfg["epochs"], evaluate
+        name, model, step, nn.CrossEntropyLoss(), loaders, optimizer, scheduler, epochs, evaluate
     )
     torch.save(stats, CHECKPOINTS / f"{name}_node_stats.pt")
     finish_multiclass(name, model, step, loaders, history, best_epoch, genres)
@@ -347,19 +416,27 @@ def gnn_genre(cfg: dict, args: argparse.Namespace) -> str:
 # ---------------------------------------------------------------- MusicCaps graphs + captions
 
 
-def musiccaps_graph_text(cfg: dict, text_mode: str):
-    """One PyG Data per MusicCaps clip carrying its segment graph, tokenized caption and tag targets."""
+def musiccaps_graph_text(cfg: dict, text_mode: str, cnn_nodes: bool = False):
+    """One PyG Data per MusicCaps clip carrying its segment graph, tokenized caption and tag targets.
+
+    With `cnn_nodes`, each graph also carries its segments' log-mel patches (float16, about 100 KB per clip).
+    """
     from transformers import AutoTokenizer
 
     from src.datasets import mask_tags, tag_mask_pattern
 
     df, vocab = musiccaps_with_targets(cfg)
-    graphs = torch.load(resolve(cfg["paths"]["processed"]) / "musiccaps" / "segment_graphs.pt", weights_only=False)
+    root = resolve(cfg["paths"]["processed"]) / "musiccaps"
+    graphs = torch.load(root / "segment_graphs.pt", weights_only=False)
     df = df[df["ytid"].isin(list(graphs))].reset_index(drop=True)
     captions = df["caption"]
     if text_mode == "masked":
         pattern = tag_mask_pattern(vocab)
         captions = captions.map(lambda caption: mask_tags(caption, pattern))
+    if cnn_nodes:
+        mel = np.load(root / "mel.npy", mmap_mode="r")
+        row_of = {ytid: row for row, ytid in enumerate(json.loads((root / "mel_ids.json").read_text(encoding="utf-8")))}
+        window, hop = segment_window_and_hop(cfg)
 
     tokenizer = AutoTokenizer.from_pretrained(cfg["text"]["model"])
     encoded = tokenizer(
@@ -372,6 +449,8 @@ def musiccaps_graph_text(cfg: dict, text_mode: str):
         data.attention_mask = encoded["attention_mask"][i : i + 1]
         data.y = torch.from_numpy(y).unsqueeze(0)
         data.ytid = ytid
+        if cnn_nodes:
+            data.patches = torch.from_numpy(segment_patches(np.asarray(mel[row_of[ytid]]), data.num_nodes, window, hop))
         by_split[split].append(data)
     stats = standardize_nodes(by_split)
     print({split: len(items) for split, items in by_split.items()}, "clips with audio", flush=True)
@@ -385,14 +464,14 @@ def fusion(cfg: dict, args: argparse.Namespace) -> str:
 
     tcfg = cfg["train"]["fusion"]
     name = f"stage3_{args.variant}_{args.text}" + ("_pretrained" if args.pretrained_gnn else "")
-    by_split, vocab, _, _, stats = musiccaps_graph_text(cfg, args.text)
+    by_split, vocab, _, _, stats = musiccaps_graph_text(cfg, args.text, args.cnn_nodes)
     loaders = {
         split: GraphLoader(items, batch_size=tcfg["batch_size"], shuffle=split == "train")
         for split, items in by_split.items()
     }
     encoder = None
     if args.variant != "bert_only":
-        encoder = build_graph_encoder(cfg, by_split["train"][0], args.arch, args.pretrained_gnn)
+        encoder = build_graph_encoder(cfg, by_split["train"][0], args.arch, args.pretrained_gnn, args.cnn_nodes)
     model = FusionTagger(
         args.variant, cfg["text"]["model"], encoder, len(vocab),
         tcfg["dim"], tcfg["heads"], tcfg["dropout"], tcfg["trainable_bert_layers"],
@@ -494,12 +573,12 @@ def contrastive(cfg: dict, args: argparse.Namespace) -> str:
 
     tcfg = cfg["train"]["contrastive"]
     name = "stage4_contrastive" + ("_pretrained" if args.pretrained_gnn else "")
-    by_split, vocab, df, tokenizer, stats = musiccaps_graph_text(cfg, "raw")
+    by_split, vocab, df, tokenizer, stats = musiccaps_graph_text(cfg, "raw", args.cnn_nodes)
     loaders = {
         split: GraphLoader(items, batch_size=tcfg["batch_size"], shuffle=split == "train", drop_last=split == "train")
         for split, items in by_split.items()
     }
-    encoder = build_graph_encoder(cfg, by_split["train"][0], args.arch, args.pretrained_gnn)
+    encoder = build_graph_encoder(cfg, by_split["train"][0], args.arch, args.pretrained_gnn, args.cnn_nodes)
     model = DualEncoder(
         cfg["text"]["model"], encoder, tcfg["dim"], tcfg["temperature"], tcfg["trainable_bert_layers"]
     ).to(DEVICE)
@@ -573,6 +652,14 @@ def main() -> None:
     parser.add_argument("--graph", choices=["segment", "chord"], default="segment", help="stage 2 graph type")
     parser.add_argument("--variant", choices=["bert_only", "gnn_only", "concat", "cross_attention"], default="cross_attention")
     parser.add_argument("--pretrained-gnn", metavar="CHECKPOINT", help="start the graph encoder from a stage 2 checkpoint")
+    parser.add_argument(
+        "--crop", type=float, metavar="FRACTION",
+        help="stage 2 GNN and CNN: train on random crops covering this fraction of each clip",
+    )
+    parser.add_argument(
+        "--cnn-nodes", action="store_true",
+        help="graph models (stages 2-4): add a CNN embedding of each segment's log-mel patch to its node features",
+    )
     parser.add_argument("--epochs", type=int, help="override the epoch count in config.yaml")
     args = parser.parse_args()
 

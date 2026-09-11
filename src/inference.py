@@ -18,11 +18,11 @@ import torch
 from transformers import AutoTokenizer
 
 from src import ROOT
-from src.audio_features import extract_features, load_audio
+from src.audio_features import extract_features, load_audio, segment_patches, window_and_hop
 from src.contrastive import DualEncoder
 from src.datasets import load_musiccaps, mask_tags, tag_mask_pattern
 from src.fusion_model import FusionTagger
-from src.gnn_model import GraphEncoder
+from src.gnn_model import GraphEncoder, SegmentCNN
 from src.graph_builder import segment_graph
 from src.utils import load_config, resolve
 
@@ -57,8 +57,13 @@ class Leitmotif:
     @staticmethod
     def _graph_encoder(state: dict, run: dict) -> GraphEncoder:
         gcfg = run["config"]["train"]["gnn_genre"]
-        in_dim = state["graph.project.weight"].shape[1]
-        return GraphEncoder(in_dim, gcfg["hidden"], gcfg["layers"], run["args"]["arch"], gcfg["dropout"], edge_dim=3)
+        segment_cnn = None
+        if run["args"].get("cnn_nodes"):
+            segment_cnn = SegmentCNN(gcfg["cnn_nodes_dim"], tuple(gcfg["cnn_nodes_channels"]))
+        in_dim = state["graph.project.weight"].shape[1] - (segment_cnn.out_dim if segment_cnn is not None else 0)
+        return GraphEncoder(
+            in_dim, gcfg["hidden"], gcfg["layers"], run["args"]["arch"], gcfg["dropout"], edge_dim=3, segment_cnn=segment_cnn
+        )
 
     @property
     def fusion(self):
@@ -85,7 +90,7 @@ class Leitmotif:
             )
             model.load_state_dict(state)
             index = torch.load(CHECKPOINTS / f"{self.retrieval_name}_index.pt", map_location="cpu")
-            self._retrieval = (model.to(self.device).eval(), stats, index)
+            self._retrieval = (model.to(self.device).eval(), stats, index, run["args"])
         return self._retrieval
 
     @property
@@ -97,12 +102,16 @@ class Leitmotif:
 
     # ------------------------------------------------------------ inputs
 
-    def graph(self, audio_path, stats: dict, offset: float = 0.0, seconds: float | None = 10.0):
+    def graph(self, audio_path, stats: dict, with_patches: bool = False, offset: float = 0.0, seconds: float | None = 10.0):
         """Segment graph of `seconds` of audio starting at `offset`, normalized like the training graphs."""
-        y = load_audio(audio_path, self.cfg["audio"]["sample_rate"], max_seconds=None if seconds is None else offset + seconds)
-        y = y[int(offset * self.cfg["audio"]["sample_rate"]):]
-        data = segment_graph(extract_features(y, self.cfg["audio"]), self.cfg["segments"], self.cfg["graph"])
+        sample_rate = self.cfg["audio"]["sample_rate"]
+        y = load_audio(audio_path, sample_rate, max_seconds=None if seconds is None else offset + seconds)
+        features = extract_features(y[int(offset * sample_rate):], self.cfg["audio"])
+        data = segment_graph(features, self.cfg["segments"], self.cfg["graph"])
         data.x = (data.x - stats["mean"]) / stats["std"]
+        if with_patches:
+            window, hop = window_and_hop(self.cfg["segments"], features.frame_rate)
+            data.patches = torch.from_numpy(segment_patches(features.log_mel, data.num_nodes, window, hop))
         data.batch = torch.zeros(data.num_nodes, dtype=torch.long)
         return data
 
@@ -123,7 +132,8 @@ class Leitmotif:
     def tags(self, audio_path, caption: str = "", top: int = 10, **window) -> dict[str, float]:
         """The `top` most likely tags for a clip, given its audio and an optional caption."""
         model, stats, args = self.fusion
-        data = self._with_caption(self.graph(audio_path, stats, **window), caption, args["text"] == "masked")
+        data = self.graph(audio_path, stats, args.get("cnn_nodes", False), **window)
+        data = self._with_caption(data, caption, args["text"] == "masked")
         with self._autocast():
             probs = torch.sigmoid(model(data).float())[0].cpu().numpy()
         return {self.vocab[i]: float(probs[i]) for i in np.argsort(-probs)[:top]}
@@ -134,14 +144,17 @@ class Leitmotif:
         model, stats, args = self.fusion
         if args["variant"] != "cross_attention":
             raise ValueError("explain() needs the cross-attention fusion model")
-        data = self._with_caption(self.graph(audio_path, stats, **window), caption, args["text"] == "masked")
+        data = self.graph(audio_path, stats, args.get("cnn_nodes", False), **window)
+        data = self._with_caption(data, caption, args["text"] == "masked")
         with self._autocast():
             _, attention = model.fuse(data, return_attention=True)
-        keep = data.attention_mask[0].bool()
+        keep = data.attention_mask[0].bool().cpu().numpy()
         return {
-            "tokens": self.tokenizer.convert_ids_to_tokens(data.input_ids[0][keep].tolist()),
+            "tokens": self.tokenizer.convert_ids_to_tokens(data.input_ids[0].cpu().numpy()[keep].tolist()),
             "segment_seconds": data.segment_seconds.cpu().numpy(),
-            "attention": attention["text_to_graph"][0, keep.cpu()].float().cpu().numpy(),
+            "edge_index": data.edge_index.cpu().numpy(),
+            "edge_attr": data.edge_attr.float().cpu().numpy(),
+            "attention": attention["text_to_graph"][0].float().cpu().numpy()[keep],
         }
 
     # ------------------------------------------------------------ stage 4
@@ -158,7 +171,7 @@ class Leitmotif:
     @torch.no_grad()
     def search(self, query: str, k: int = 5) -> list[dict]:
         """MusicCaps clips whose audio graphs are closest to a text query."""
-        model, _, index = self.retrieval
+        model, _, index, _ = self.retrieval
         encoded = self.tokenizer([query], truncation=True, max_length=self.cfg["text"]["max_length"], return_tensors="pt").to(self.device)
         with self._autocast():
             q = model.embed_text(encoded["input_ids"], encoded["attention_mask"]).float().cpu()
@@ -169,8 +182,8 @@ class Leitmotif:
     @torch.no_grad()
     def describe(self, audio_path, k: int = 3, **window) -> list[dict]:
         """The MusicCaps captions closest to a new clip's audio graph."""
-        model, stats, index = self.retrieval
-        data = self.graph(audio_path, stats, **window).to(self.device)
+        model, stats, index, args = self.retrieval
+        data = self.graph(audio_path, stats, args.get("cnn_nodes", False), **window).to(self.device)
         with self._autocast():
             g = model.embed_graph(data).float().cpu()
         scores = (index["text_embeddings"] @ g.T).squeeze(1)

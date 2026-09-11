@@ -56,6 +56,10 @@ train:
     dropout: 0.3
     lr: 1.0e-3
     weight_decay: 1.0e-4
+    cnn_nodes_epochs: 20       # --cnn-nodes: a small CNN runs over every segment's spectrogram patch
+    cnn_nodes_batch_size: 32
+    cnn_nodes_dim: 128
+    cnn_nodes_channels: [16, 32, 64]
   cnn_genre:                   # baseline B2
     epochs: 30
     batch_size: 32
